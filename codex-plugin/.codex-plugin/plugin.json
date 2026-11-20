@@ -1,0 +1,10 @@
+{
+  "name": "resetwise",
+  "version": "0.1.0",
+  "description": "Plan Codex quota and reset cards using Resetwise.",
+  "skills": "./skills/",
+  "interface": {
+    "displayName": "Resetwise",
+    "shortDescription": "Read Codex quota and compare reset card plans."
+  }
+}

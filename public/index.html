@@ -1,0 +1,291 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="description" content="结合额度周期、订阅到期、公告重置和作息，规划多张重置卡和续订。" data-i18n data-i18n-attribute="content">
+  <meta name="theme-color" content="#f5f4fb">
+  <title data-i18n>Resetwise · 重置卡规划器</title>
+  <link rel="stylesheet" href="style.css?v=15">
+  <script src="i18n.js?v=23" defer></script>
+  <script src="app.js?v=32" defer></script>
+</head>
+<body id="top">
+  <header class="topbar">
+    <div class="shell topbar-inner">
+      <a class="brand" href="#top">
+        <span class="brand-mark" aria-hidden="true"><i></i></span>
+        Resetwise
+      </a>
+      <nav class="top-actions" aria-label="快捷操作" data-i18n data-i18n-attribute="aria-label">
+        <button type="button" class="button button-outline" id="load-example">填写我的额度</button>
+        <button type="button" class="button button-outline language-switch" id="language-toggle" lang="en" aria-label="Switch to English">EN</button>
+      </nav>
+    </div>
+  </header>
+
+  <main class="shell">
+    <h1 class="page-title" data-i18n>重置卡规划</h1>
+
+    <div class="workspace">
+      <form class="settings panel" id="settings" novalidate aria-labelledby="settings-title">
+        <a class="plan-shortcut" id="plan-shortcut" href="#results-title" hidden>
+          <span class="shortcut-summary"><span id="shortcut-label">使用方案</span><strong id="shortcut-time"></strong></span>
+          <strong class="shortcut-gain" id="shortcut-gain"></strong>
+          <span aria-hidden="true">↓</span>
+        </a>
+        <div class="settings-top">
+          <h2 id="settings-title" data-i18n>计算条件</h2>
+          <fieldset class="mode-picker">
+            <legend class="sr-only" data-i18n>使用模式</legend>
+            <label>
+              <input type="radio" name="mode" value="extreme" checked>
+              <span><i class="mode-icon bolt" aria-hidden="true"></i><span data-i18n>极限使用</span></span>
+            </label>
+            <label>
+              <input type="radio" name="mode" value="healthy">
+              <span><i class="mode-icon heart" aria-hidden="true">♥︎</i><span data-i18n>健康使用</span></span>
+            </label>
+          </fieldset>
+
+          <div class="field-pair" id="awake-hours" hidden>
+            <label class="field" for="awake-start"><span data-i18n>每日可用时段开始</span>
+              <input id="awake-start" type="time" value="08:00" required>
+            </label>
+            <label class="field" for="awake-end"><span data-i18n>每日可用时段结束</span>
+              <input id="awake-end" type="time" value="23:00" required>
+            </label>
+          </div>
+        </div>
+
+        <div class="setting setting-content core-fields">
+          <div class="field-pair date-pair" id="weekly-fields">
+            <label class="field" for="long-left"><span data-i18n>剩余周额度</span>
+              <span class="input-unit"><input id="long-left" type="number" min="0" max="100" step="any" required><span>%</span></span>
+            </label>
+            <label class="field" for="long-end"><span data-i18n>周额度下次刷新</span>
+              <input id="long-end" type="datetime-local" required>
+            </label>
+          </div>
+          <div class="field-pair date-pair subscription-fields">
+            <label class="field" for="subscription-end"><span data-i18n>订阅到期</span>
+              <input id="subscription-end" type="datetime-local" required>
+            </label>
+            <label class="check-row"><input id="subscription-renew" type="checkbox" checked><span data-i18n>规划续订</span></label>
+          </div>
+          <div class="card-settings" aria-labelledby="card-settings-title">
+            <div class="card-settings-head">
+              <h3 id="card-settings-title" data-i18n>重置卡</h3>
+              <button type="button" class="button button-outline add-button" id="add-card"><span aria-hidden="true">＋</span> <span data-i18n>添加重置卡</span></button>
+            </div>
+            <div id="cards" class="card-fields"></div>
+          </div>
+        </div>
+
+        <div class="settings-bottom">
+          <div class="error-message" id="form-error" role="alert" hidden></div>
+          <button class="button button-primary" type="submit"><span data-i18n>计算使用方案</span> <span aria-hidden="true">→</span></button>
+        </div>
+
+        <details class="setting" id="short-setting" name="optional-settings">
+          <summary><span data-i18n>5 小时额度</span><span class="summary-note" id="short-note"></span></summary>
+          <div class="setting-content">
+            <label class="check-row"><input id="short-enabled" type="checkbox" checked><span data-i18n>启用 5 小时限制</span></label>
+            <div id="short-fields" class="conditional-fields" hidden>
+              <div class="field-pair">
+                <label class="field" for="short-amount"><span data-i18n>5 小时满额占周额度</span>
+                  <span class="input-unit"><input id="short-amount" type="number" min="0.01" step="any" value="16" required><span>%</span></span>
+                </label>
+                <label class="field" id="short-balance-field" for="short-left"><span data-i18n>剩余 5 小时额度</span>
+                  <span class="input-unit"><input id="short-left" type="number" min="0" max="100" step="any" required><span>%</span></span>
+                </label>
+              </div>
+              <label class="field" id="short-refresh-field" for="short-end">
+                <span class="field-caption">
+                  <span id="short-end-label" data-i18n>5 小时额度下次刷新</span>
+                  <span id="short-end-hint" class="field-hint" data-i18n>满额且未计时可留空</span>
+                </span>
+                <input id="short-end" type="datetime-local" aria-labelledby="short-end-label" aria-describedby="short-end-hint">
+              </label>
+            </div>
+          </div>
+        </details>
+
+        <details class="setting" id="subscription-setting" name="optional-settings">
+          <summary><span data-i18n>订阅与宽限期</span><span class="summary-note" id="subscription-note"></span></summary>
+          <div class="setting-content">
+            <label class="check-row"><input id="subscription-ios" type="checkbox" checked><span data-i18n>iOS App Store 订阅</span></label>
+            <div id="grace-fields" class="conditional-fields" hidden>
+              <label class="field" for="grace-days"><span data-i18n>预计宽限期</span>
+                <span class="input-unit"><input id="grace-days" type="number" min="0" max="28" step="any" value="3" required><span data-i18n>天</span></span>
+              </label>
+            </div>
+            <div id="renew-fields" class="conditional-fields" hidden>
+              <label class="field" for="renew-days"><span data-i18n>下一期订阅天数（选填）</span>
+                <input id="renew-days" type="number" min="1" max="365" step="1" placeholder="留空按月" data-i18n data-i18n-attribute="placeholder">
+              </label>
+              <label class="field" id="billing-day-field" for="billing-day" hidden><span data-i18n>原续订日（选填）</span>
+                <input id="billing-day" type="number" min="1" max="31" step="1" placeholder="留空用当前到期日" data-i18n data-i18n-attribute="placeholder" disabled>
+              </label>
+            </div>
+          </div>
+        </details>
+
+        <details class="setting" id="reset-setting" name="optional-settings">
+          <summary><span data-i18n>公告自动重置</span><span class="summary-note" id="reset-note"></span></summary>
+          <div class="setting-content">
+            <div id="announcements" class="announcements"></div>
+            <button type="button" class="button button-outline add-button" id="add-reset"><span aria-hidden="true">＋</span> <span data-i18n>添加公告</span></button>
+          </div>
+        </details>
+
+        <details class="setting" id="time-setting" name="optional-settings">
+          <summary><span data-i18n>更多时间设置</span></summary>
+          <div class="setting-content">
+            <div class="field-pair date-pair">
+              <label class="field" for="snapshot"><span data-i18n>剩余额度记录时间</span>
+                <input id="snapshot" type="datetime-local" aria-describedby="snapshot-hint">
+              </label>
+              <label class="field" id="long-start-field" for="long-start"><span data-i18n>本轮周额度开始（选填）</span>
+                <input id="long-start" type="datetime-local">
+              </label>
+            </div>
+            <p class="field-hint" id="snapshot-hint" data-i18n>记录时间留空用当前时间</p>
+            <label class="check-row"><input id="card-preserve" type="checkbox"><span data-i18n>用卡后保留原刷新时间</span></label>
+          </div>
+        </details>
+
+      </form>
+
+      <section class="results" aria-labelledby="results-title">
+        <div class="results-heading">
+          <h2 id="results-title" tabindex="-1" data-i18n>使用方案</h2>
+          <div class="result-actions">
+            <span id="result-status" class="result-status" role="status">正在载入示例</span>
+            <button class="button button-outline" id="restore-plan" type="button" data-i18n hidden>恢复初始方案</button>
+            <button class="button button-outline" id="recalculate" type="submit" form="settings" data-i18n hidden>重新计算</button>
+          </div>
+        </div>
+
+        <div class="result-body" id="result-body" aria-busy="true">
+          <article class="ticket" aria-labelledby="recommendation">
+            <div class="ticket-main">
+              <div>
+                <p class="ticket-label" data-i18n>重置卡方案</p>
+                <h3 id="recommendation">正在计算</h3>
+                <p class="ticket-detail" id="recommendation-detail" hidden></p>
+              </div>
+              <div class="ticket-icon" aria-hidden="true"><i></i></div>
+            </div>
+            <ul class="ticket-actions" id="ticket-actions" hidden></ul>
+            <section class="plan-adjustment" id="plan-adjustment" aria-label="调整方案" data-i18n data-i18n-attribute="aria-label" hidden>
+              <div class="adjustment-controls">
+                <button class="button button-outline" id="adjust-earlier" type="button" data-i18n>更早</button>
+                <button class="button button-outline" id="adjust-later" type="button" data-i18n>更晚</button>
+                <button class="button button-outline adjustment-close" id="adjust-close" type="button" data-i18n>关闭</button>
+              </div>
+              <p id="adjust-message" class="adjustment-message" role="status"></p>
+              <div id="adjust-preview" hidden>
+                <dl class="adjustment-changes" id="adjust-changes"></dl>
+                <button class="button button-primary adjustment-use" id="adjust-use" type="button" data-i18n>采用方案</button>
+              </div>
+            </section>
+            <div class="ticket-metrics">
+              <div id="gain-metric"><span data-i18n>可多用</span><strong id="gain">—</strong></div>
+              <div><span data-i18n>订阅可用至</span><strong id="access-end">—</strong></div>
+            </div>
+          </article>
+
+          <section class="panel comparison" id="comparison" aria-labelledby="comparison-title">
+            <div class="section-heading">
+              <h3 id="comparison-title" data-i18n>预计可用额度</h3>
+              <span data-i18n>一轮周额度 = 100%</span>
+            </div>
+            <div class="comparison-row">
+              <span data-i18n>不用卡</span>
+              <div class="meter" aria-hidden="true"><div id="baseline-bar"></div></div>
+              <strong id="baseline">—</strong>
+            </div>
+            <div class="comparison-row" id="plan-row">
+              <span data-i18n>按方案</span>
+              <div class="meter best" aria-hidden="true"><div id="plan-bar"></div></div>
+              <strong id="plan-total">—</strong>
+            </div>
+            <div class="comparison-note">
+              <span data-i18n>按尽快用完估算</span>
+            </div>
+          </section>
+
+          <section class="panel timeline" id="plan-detail" aria-labelledby="usage-title" hidden>
+            <div class="section-heading">
+              <h3 id="usage-title" tabindex="-1" data-i18n>方案时间线</h3>
+              <span id="plan-steps-hours" hidden></span>
+            </div>
+            <p id="usage-scenario" class="usage-scenario"></p>
+            <figure class="plan-chart" id="plan-chart" aria-label="用卡和续订时间分布" data-i18n data-i18n-attribute="aria-label">
+              <div class="plan-chart-grid">
+                <div class="plan-chart-labels" id="plan-chart-labels" aria-hidden="true"></div>
+                <div class="plan-chart-plot">
+                  <div class="plan-chart-folds" id="plan-chart-folds" aria-hidden="true"></div>
+                  <div class="plan-chart-tracks" id="plan-chart-tracks"></div>
+                </div>
+                <div class="plan-chart-axis" id="plan-chart-axis" aria-hidden="true"></div>
+              </div>
+              <figcaption class="plan-chart-note" id="plan-chart-note" hidden>
+                <span class="plan-chart-swatch" aria-hidden="true"></span>
+                <span data-i18n>斜纹表示压缩显示的长间隔</span>
+              </figcaption>
+              <div class="plan-chart-tooltip" id="plan-chart-tooltip" role="tooltip" hidden>
+                <strong id="plan-chart-tooltip-title" aria-hidden="true"></strong>
+                <span id="plan-chart-tooltip-time"></span>
+                <span id="plan-chart-tooltip-quota" hidden></span>
+              </div>
+            </figure>
+            <ol class="plan-sequence" id="plan-steps-list" role="list"></ol>
+            <details class="usage-details" id="usage-details">
+              <summary id="usage-summary" data-i18n>刷新与时段用量</summary>
+              <table class="usage-table" aria-labelledby="usage-summary">
+                <thead>
+                  <tr><th scope="col" data-i18n>时间与操作</th><th scope="col" data-i18n>预计用量</th></tr>
+                </thead>
+                <tbody id="plan-rows"></tbody>
+              </table>
+            </details>
+          </section>
+        </div>
+      </section>
+    </div>
+
+    <noscript><p class="error-message" data-i18n>请开启 JavaScript 后使用计算器。</p></noscript>
+  </main>
+
+  <footer class="shell site-footer">
+    <a href="https://x.com/edward84625281" target="_blank" rel="noopener noreferrer" data-i18n>在 X 上联系我</a>
+  </footer>
+
+  <template id="plan-step-template">
+    <li>
+      <div class="step-heading"><strong></strong><span class="step-value"></span></div>
+      <p class="step-detail"></p>
+    </li>
+  </template>
+
+  <template id="announcement-template">
+    <fieldset class="announcement">
+      <legend></legend>
+      <label class="field">
+        <span data-i18n>自动重置时间</span>
+        <input type="datetime-local" data-key="time" required>
+      </label>
+      <button type="button" class="remove-button" data-i18n>移除</button>
+    </fieldset>
+  </template>
+
+  <template id="card-template">
+    <div class="card-field">
+      <label class="field"><span></span><input type="datetime-local" required></label>
+      <button type="button" class="remove-button" data-i18n>移除</button>
+    </div>
+  </template>
+</body>
+</html>

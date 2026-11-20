@@ -1,0 +1,234 @@
+(() => {
+  'use strict';
+
+  const english = {
+    '结合额度周期、订阅到期、公告重置和作息，规划多张重置卡和续订。': 'Plan reset cards and renewal around quota cycles, subscription expiry, announced resets, and your schedule.',
+    'Resetwise · 重置卡规划器': 'Resetwise · Reset Card Planner',
+    '快捷操作': 'Quick actions',
+    '在 X 上联系我': 'Contact me on X',
+    '重置卡规划': 'Reset card planner',
+    '计算条件': 'Inputs',
+    '使用模式': 'Usage mode',
+    '极限使用': 'Extreme mode',
+    '健康使用': 'Healthy mode',
+    '每日可用时段开始': 'Daily start time',
+    '每日可用时段结束': 'Daily end time',
+    '剩余周额度': 'Weekly quota remaining',
+    '周额度下次刷新': 'Next weekly refresh',
+    '订阅到期': 'Subscription expires',
+    '重置卡到期': 'Reset card expires',
+    '重置卡': 'Reset cards',
+    '添加重置卡': 'Add reset card',
+    '第 {number} 张到期': 'Card {number} expires',
+    '移除第 {number} 张重置卡': 'Remove reset card {number}',
+    '规划续订': 'Plan to renew',
+    '下一期订阅天数（选填）': 'Next term in days (optional)',
+    '留空按月': 'Leave blank for monthly renewal',
+    '原续订日（选填）': 'Original monthly billing day (optional)',
+    '留空用当前到期日': 'Defaults to the current expiry day',
+    '按月续订': 'Monthly renewal',
+    '续订 {days} 天': 'Renewal · {days} d',
+    '计算使用方案': 'Calculate plan',
+    '5 小时额度': '5-hour quota',
+    '启用 5 小时限制': 'Apply 5-hour limit',
+    '5 小时满额占周额度': '5-hour cap as % of weekly',
+    '剩余 5 小时额度': '5-hour quota remaining',
+    '5 小时额度下次刷新': 'Next 5-hour refresh',
+    '满额且未计时可留空': 'Leave blank if full and untimed',
+    '订阅与宽限期': 'Subscription and grace period',
+    'iOS App Store 订阅': 'iOS App Store subscription',
+    '预计宽限期': 'Estimated grace period',
+    '天': 'days',
+    '公告自动重置': 'Announced automatic resets',
+    '添加公告': 'Add announcement',
+    '更多时间设置': 'More timing settings',
+    '剩余额度记录时间': 'Quota recorded at',
+    '记录时间留空用当前时间': 'A blank recorded time uses the current time',
+    '本轮周额度开始（选填）': 'Weekly cycle started (optional)',
+    '用卡后保留原刷新时间': 'Keep the scheduled refresh after using a card',
+    '使用方案': 'Your plan',
+    '重新计算': 'Recalculate',
+    '恢复初始方案': 'Restore original plan',
+    '调整': 'Adjust',
+    '调整方案': 'Adjust plan',
+    '调整时段 · {action}': 'Adjust timing · {action}',
+    '更早': 'Earlier',
+    '更晚': 'Later',
+    '关闭': 'Close',
+    '采用方案': 'Apply plan',
+    '正在载入备选方案…': 'Loading alternative…',
+    '正在检查其他时段…': 'Checking other times…',
+    '可用额度仍为 {value}': 'Usable quota stays at {value}',
+    '真实额度 {value}': 'Actual quota {value}',
+    '按示例时刻逐张加入，计入自然刷新变化': 'Adds cards in the planned order and accounts for changes to scheduled refreshes.',
+    '已采用调整方案': 'Alternative plan applied',
+    '计算服务暂时不可用，请重试。': 'The planning service is unavailable. Try again.',
+    '方案已失效，请重新计算。': 'This plan is no longer available. Recalculate to continue.',
+    '请求无效，请重新计算。': 'Invalid request. Recalculate to continue.',
+    '请求过大，请减少重置卡或公告数量。': 'Too many reset cards or announcements. Remove some and try again.',
+    '预填链接无效。': 'This prefill link is invalid.',
+    '已预填 · 待计算': 'Prefilled · ready to calculate',
+    '订阅可用至': 'Subscription access until',
+    '操作步骤': 'Action plan',
+    '每天 {from}–{to}': 'Daily {from}–{to}',
+    '每天 {from}–次日 {to}': 'Daily {from}–{to} next day',
+    '约 {value} 周额度': 'About {value} of weekly quota',
+    '用卡前先用额度': 'Use available quota first',
+    '从 {from} 起，先用现有额度，刷新后继续。': 'Start at {from}. Use available quota and resume after refreshes.',
+    '在时段内用卡': 'Use the card in this window',
+    '已重置的额度重新计时。': 'The reset quotas start new cycles.',
+    '用卡后按原时间刷新。': 'Quotas keep their scheduled refresh times.',
+    '用卡后继续用额度': 'Use the refilled quota',
+    '先用补回的额度，每次刷新后继续，直到 {end}。': 'Use the refilled quota and resume after refreshes until {end}.',
+    '跳过用卡': 'Skip the card',
+    '本次推演没有可用额度。': 'No usable quota in this period.',
+    '使用现有和刷新后的额度': 'Use available and refreshed quota',
+    '从 {from} 起，使用至 {end}。': 'Use from {from} until {end}.',
+    '任一额度用完，等对应的 5 小时或周额度刷新。': 'If you hit either limit, wait for its refresh.',
+    '预计可用额度': 'Estimated usable quota',
+    '按尽快用完估算': 'Assumes immediate use',
+    '一轮周额度 = 100%': '100% = one full weekly quota',
+    '方案时间线': 'Plan timeline',
+    '用卡和续订时间分布': 'Reset card and renewal timeline',
+    '第 {number} 张': 'Card {number}',
+    '常规使用': 'Routine use',
+    '斜纹表示压缩显示的长间隔': 'Striped areas show compressed gaps',
+    '刷新与时段用量': 'Refreshes and usage by time window',
+    '阶段用量 {value}': 'Stage usage {value}',
+    '时段用量': 'Usage',
+    '最高 {value}': 'Peak {value}',
+    '时间与操作': 'Time and action',
+    '预计用量': 'Estimated usage',
+    '以 {time} 用卡为例，额度一可用就用。': 'This example uses the card at {time} and spends quota as soon as it is available.',
+    '不用卡': 'No card',
+    '推演开始': 'Plan starts',
+    '本轮周额度开始': 'Weekly cycle started',
+    '周额度刷新': 'Weekly refresh',
+    '5 小时额度刷新': '5-hour refresh',
+    '公告重置': 'Announced reset',
+    '用卡时段': 'When to use the card',
+    '可用期结束': 'Access ends',
+    '转为免费': 'Switches to free',
+    '续订': 'Renewal',
+    '无缝续订': 'Renew without interruption',
+    '转免费后重新订阅': 'Resubscribe after switching to free',
+    '若已开启自动续订，先关闭。确认转为免费后再订阅。': 'Turn off auto-renew if enabled. Resubscribe once the account is free.',
+    '额度与刷新时间沿用原周期。': 'Quota and refresh times stay on the current cycles.',
+    '重新订阅 · 额度重置': 'Resubscribe · quotas reset',
+    '{time} 起': '{time} or later',
+    '重置卡方案': 'Reset card plan',
+    '安排 {used} / {total} 张': '{used} of {total} cards scheduled',
+    '未安排 {cards}': 'Unscheduled: {cards}',
+    '第 {number} 张重置卡': 'Card {number}',
+    '第 {number} 张重置卡到期': 'Card {number} expires',
+    '使用第 {number} 张重置卡': 'Use reset card {number}',
+    '用第 {number} 张卡': 'Use card {number}',
+    '使用第 {number} 张重置卡重置额度': 'Reset quotas with card {number}',
+    '使用额度': 'Use quota',
+    '示例时刻 {time}': 'Example time {time}',
+    '每张卡的时段以其他操作按示例时刻为准。': 'Each card window assumes the other actions happen at their example times.',
+    '可多用': 'Extra quota',
+    '按方案': 'Planned',
+    '、': ', ',
+    '请开启 JavaScript 后使用计算器。': 'Enable JavaScript to use the calculator.',
+    '自动重置时间': 'Automatic reset time',
+    '移除': 'Remove',
+    '填写我的额度': 'Use my quota',
+    '载入示例': 'Load example',
+    '已启用': 'Enabled',
+    '未启用': 'Off',
+    'iOS · +{days} 天': 'iOS · +{days} d',
+    '{count} 项': '{count}',
+    '暂无': 'None',
+    '公告 {number}': 'Announcement {number}',
+    '移除公告 {number}': 'Remove announcement {number}',
+    '正在载入示例': 'Loading example…',
+    '正在计算': 'Calculating…',
+    '初步方案 · 继续比较中': 'Preliminary plan · still comparing',
+    '待计算': 'Ready to calculate',
+    '已计算': 'Calculated',
+    '请检查计算条件': 'Check your inputs',
+    '示例': 'Example',
+    '周额度': 'weekly quota',
+    '周额度和 5 小时额度': 'weekly and 5-hour quotas',
+    '{quota}刷新': 'Refresh · {quota}',
+    '公告重置 · {quota}': 'Announced reset · {quota}',
+    '开始宽限期': 'Grace period starts',
+    '订阅到期 · 开始宽限期': 'Subscription expires · Grace period starts',
+    '订阅可用期结束': 'Subscription access ends',
+    '使用重置卡重置额度': 'Reset quotas with the card',
+    '重置卡建议': 'Reset card recommendation',
+    '订阅已到期': 'Subscription expired',
+    '没有可用卡的时间': 'No time to use the card',
+    '检查卡和订阅的到期时间，以及每日可用时段。': 'Check the expiry dates and daily hours.',
+    '建议保留重置卡': 'Keep your reset card',
+    '剩余额度还多，先用现有额度。': 'You still have plenty of quota. Use it first.',
+    '用卡不会增加可用额度。': 'Using the card gives you no extra quota.',
+    '仅 1 分钟': '1 minute only',
+    '至少多用': 'Minimum gain',
+    '时段内至少': 'Window minimum',
+    '按时段用卡': 'Use the card',
+    '最优 {value}': 'Best {value}',
+    '请输入该时区中有效的日期和分钟。': 'Enter a valid date and time in this time zone.',
+    '请检查此项的值。': 'Check the value in this field.',
+    '请输入有效的数值或日期。': 'Enter a valid number or date.',
+    '请填写此项。': 'Complete this field.',
+    '此项最小为 {min}。': 'Enter {min} or more.',
+    '此项最大为 {max}。': 'Enter {max} or less.',
+    '请填写整数。': 'Enter a whole number.',
+    '请输入精确到分钟的时间。': 'Enter a time to the nearest minute.',
+    '计算失败。请检查输入后重新计算。': 'Calculation failed. Check your inputs and try again.',
+    '请填写 1 至 365 天。': 'Enter 1 to 365 days.',
+    '请填写 1 至 31 日。': 'Enter a billing day from 1 to 31.',
+    '找不到可续订的使用时段。': 'No usable renewal window was found.',
+    '请填写有效的重置卡到期时间。': 'Enter a valid reset card expiry.',
+    '用卡截止时间需要晚于生效时间。': 'The card must expire after it becomes valid.',
+    '本轮周额度的开始时间需要早于或等于推演起点。': 'The weekly cycle must start at or before the projection starts.',
+    '周额度下次刷新时间需要晚于推演起点。': 'The next weekly refresh must be after the projection starts.',
+    '5 小时额度未满时，请填写当前窗口的刷新时间。': 'If the 5-hour quota is below full, enter its next refresh time.',
+    '5 小时额度的刷新时间需要晚于推演起点。': 'The next 5-hour refresh must be after the projection starts.',
+    '健康模式的起止时间需要不同。全天可用时可选择极限使用。': 'Choose different start and end times in Healthy mode. Select Extreme mode for 24-hour use.',
+    '单次最多推演 400 天（含宽限期）。': 'Each projection can cover up to 400 days, including the grace period.',
+  };
+
+  const LANGUAGE_KEY = 'resetwise.language';
+
+  function initialLanguage() {
+    try {
+      const saved = localStorage.getItem(LANGUAGE_KEY);
+      if (saved === 'en' || saved === 'zh') return saved;
+    } catch { /* 继续按浏览器语言选择。 */ }
+
+    const preferences = navigator.languages?.length ? navigator.languages : [navigator.language];
+    return preferences.map(locale => locale?.toLowerCase().split('-')[0])
+      .find(locale => locale === 'en' || locale === 'zh') ?? 'en';
+  }
+
+  let language = initialLanguage();
+
+  function t(source, values = {}) {
+    const message = language === 'en' && Object.hasOwn(english, source) ? english[source] : source;
+    return message.replace(/\{(\w+)\}/g, (placeholder, name) => Object.hasOwn(values, name) ? values[name] : placeholder);
+  }
+
+  function apply(root = document) {
+    for (const element of root.querySelectorAll('[data-i18n]')) {
+      const attribute = element.dataset.i18nAttribute;
+      const source = element.dataset.i18n ||= attribute ? element.getAttribute(attribute) : element.textContent.trim();
+      if (attribute) element.setAttribute(attribute, t(source));
+      else element.textContent = t(source);
+    }
+  }
+
+  function setLanguage(next) {
+    if (next !== 'zh' && next !== 'en') return;
+    language = next;
+    document.documentElement.lang = language === 'en' ? 'en' : 'zh-CN';
+  }
+
+  function rememberLanguage() {
+    try { localStorage.setItem(LANGUAGE_KEY, language); } catch { /* 本次切换仍然生效。 */ }
+  }
+
+  window.ResetwiseCopy = { t, apply, setLanguage, rememberLanguage, getLanguage: () => language };
+})();
