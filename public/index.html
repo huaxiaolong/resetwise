@@ -6,9 +6,9 @@
   <meta name="description" content="结合额度周期、订阅到期、公告重置和作息，规划多张重置卡和续订。" data-i18n data-i18n-attribute="content">
   <meta name="theme-color" content="#f5f4fb">
   <title data-i18n>Resetwise · 重置卡规划器</title>
-  <link rel="stylesheet" href="style.css?v=17">
+  <link rel="stylesheet" href="style.css?v=18">
   <script src="i18n.js?v=27" defer></script>
-  <script src="app.js?v=36" defer></script>
+  <script src="app.js?v=37" defer></script>
 </head>
 <body id="top">
   <header class="topbar">
@@ -35,7 +35,10 @@
           <span aria-hidden="true">↓</span>
         </a>
         <div class="settings-top">
-          <h2 id="settings-title" data-i18n>计算条件</h2>
+          <div class="section-heading">
+            <h2 id="settings-title" data-i18n>计算条件</h2>
+            <span id="result-status" class="result-status" role="status">正在载入示例</span>
+          </div>
           <fieldset class="mode-picker">
             <legend class="sr-only" data-i18n>使用模式</legend>
             <label>
@@ -158,90 +161,93 @@
 
       </form>
 
-      <section class="results" aria-labelledby="results-title">
-        <div class="results-heading">
-          <h2 id="results-title" tabindex="-1" data-i18n>使用方案</h2>
-          <div class="result-actions">
-            <span id="result-status" class="result-status" role="status">正在载入示例</span>
-            <button class="button button-outline" id="restore-plan" type="button" data-i18n hidden>恢复初始方案</button>
-            <button class="button button-outline" id="recalculate" type="submit" form="settings" data-i18n hidden>重新计算</button>
-          </div>
-        </div>
-
+      <section class="results" id="results-title" tabindex="-1" aria-label="使用方案" data-i18n data-i18n-attribute="aria-label">
         <div class="result-body" id="result-body" aria-busy="true">
-          <article class="ticket" aria-labelledby="recommendation">
-            <div class="ticket-main">
-              <div>
-                <p class="ticket-label" data-i18n>重置卡方案</p>
-                <h3 id="recommendation">正在计算</h3>
-                <p class="ticket-detail" id="recommendation-detail" hidden></p>
+          <div class="plan-overview">
+            <article class="ticket" aria-labelledby="recommendation">
+              <div class="ticket-main">
+                <div>
+                  <p class="ticket-label" data-i18n>重置卡方案</p>
+                  <h2 id="recommendation">正在计算</h2>
+                  <p class="ticket-detail" id="recommendation-detail" hidden></p>
+                </div>
+                <div class="ticket-icon" aria-hidden="true"><i></i></div>
               </div>
-              <div class="ticket-icon" aria-hidden="true"><i></i></div>
-            </div>
-            <ul class="ticket-actions" id="ticket-actions" hidden></ul>
-            <section class="plan-adjustment" id="plan-adjustment" aria-label="调整方案" data-i18n data-i18n-attribute="aria-label" hidden>
-              <div class="adjustment-controls">
-                <button class="button button-outline" id="adjust-earlier" type="button" data-i18n>更早</button>
-                <button class="button button-outline" id="adjust-later" type="button" data-i18n>更晚</button>
-                <button class="button button-outline adjustment-close" id="adjust-close" type="button" data-i18n>关闭</button>
+              <ul class="ticket-actions" id="ticket-actions" hidden></ul>
+              <section class="plan-adjustment" id="plan-adjustment" aria-label="调整方案" data-i18n data-i18n-attribute="aria-label" hidden>
+                <div class="adjustment-controls">
+                  <button class="button button-outline" id="adjust-earlier" type="button" data-i18n>更早</button>
+                  <button class="button button-outline" id="adjust-later" type="button" data-i18n>更晚</button>
+                  <button class="button button-outline adjustment-close" id="adjust-close" type="button" data-i18n>关闭</button>
+                </div>
+                <p id="adjust-message" class="adjustment-message" role="status"></p>
+                <div id="adjust-preview" hidden>
+                  <dl class="adjustment-changes" id="adjust-changes"></dl>
+                  <button class="button button-primary adjustment-use" id="adjust-use" type="button" data-i18n>采用方案</button>
+                </div>
+              </section>
+              <div class="result-actions">
+                <button class="ticket-adjust" id="restore-plan" type="button" data-i18n hidden>恢复初始方案</button>
+                <button class="ticket-adjust" id="recalculate" type="submit" form="settings" data-i18n hidden>重新计算</button>
               </div>
-              <p id="adjust-message" class="adjustment-message" role="status"></p>
-              <div id="adjust-preview" hidden>
-                <dl class="adjustment-changes" id="adjust-changes"></dl>
-                <button class="button button-primary adjustment-use" id="adjust-use" type="button" data-i18n>采用方案</button>
+              <div class="ticket-metrics">
+                <div id="gain-metric"><span data-i18n>可多用</span><strong id="gain">—</strong></div>
+                <div><span data-i18n>订阅可用至</span><strong id="access-end">—</strong></div>
+              </div>
+            </article>
+
+            <section class="panel comparison" id="comparison" aria-labelledby="comparison-title">
+              <div class="section-heading">
+                <h3 id="comparison-title" data-i18n>预计可用额度</h3>
+                <span data-i18n>一轮周额度 = 100%</span>
+              </div>
+              <div class="comparison-row">
+                <span data-i18n>不用卡</span>
+                <div class="meter" aria-hidden="true"><div id="baseline-bar"></div></div>
+                <strong id="baseline">—</strong>
+              </div>
+              <div class="comparison-row" id="plan-row">
+                <span data-i18n>按方案</span>
+                <div class="meter best" aria-hidden="true"><div id="plan-bar"></div></div>
+                <strong id="plan-total">—</strong>
+              </div>
+              <div class="comparison-note">
+                <span data-i18n>按尽快用完估算</span>
               </div>
             </section>
-            <div class="ticket-metrics">
-              <div id="gain-metric"><span data-i18n>可多用</span><strong id="gain">—</strong></div>
-              <div><span data-i18n>订阅可用至</span><strong id="access-end">—</strong></div>
-            </div>
-          </article>
 
-          <section class="panel comparison" id="comparison" aria-labelledby="comparison-title">
-            <div class="section-heading">
-              <h3 id="comparison-title" data-i18n>预计可用额度</h3>
-              <span data-i18n>一轮周额度 = 100%</span>
-            </div>
-            <div class="comparison-row">
-              <span data-i18n>不用卡</span>
-              <div class="meter" aria-hidden="true"><div id="baseline-bar"></div></div>
-              <strong id="baseline">—</strong>
-            </div>
-            <div class="comparison-row" id="plan-row">
-              <span data-i18n>按方案</span>
-              <div class="meter best" aria-hidden="true"><div id="plan-bar"></div></div>
-              <strong id="plan-total">—</strong>
-            </div>
-            <div class="comparison-note">
-              <span data-i18n>按尽快用完估算</span>
-            </div>
-          </section>
+            <section class="panel timeline" id="plan-detail" aria-labelledby="usage-title" hidden>
+              <div class="section-heading">
+                <h3 id="usage-title" data-i18n>方案时间线</h3>
+              </div>
+              <figure class="plan-chart" id="plan-chart" aria-label="用卡和续订时间分布" data-i18n data-i18n-attribute="aria-label">
+                <div class="plan-chart-grid">
+                  <div class="plan-chart-labels" id="plan-chart-labels" aria-hidden="true"></div>
+                  <div class="plan-chart-plot">
+                    <div class="plan-chart-folds" id="plan-chart-folds" aria-hidden="true"></div>
+                    <div class="plan-chart-tracks" id="plan-chart-tracks"></div>
+                  </div>
+                  <div class="plan-chart-axis" id="plan-chart-axis" aria-hidden="true"></div>
+                </div>
+                <figcaption class="plan-chart-note" id="plan-chart-note" hidden>
+                  <span class="plan-chart-swatch" aria-hidden="true"></span>
+                  <span data-i18n>斜纹表示压缩显示的长间隔</span>
+                </figcaption>
+                <div class="plan-chart-tooltip" id="plan-chart-tooltip" role="tooltip" hidden>
+                  <strong id="plan-chart-tooltip-title" aria-hidden="true"></strong>
+                  <span id="plan-chart-tooltip-time"></span>
+                  <span id="plan-chart-tooltip-quota" hidden></span>
+                </div>
+              </figure>
+            </section>
+          </div>
 
-          <section class="panel timeline" id="plan-detail" aria-labelledby="usage-title" hidden>
+          <section class="panel timeline plan-breakdown" id="plan-breakdown" aria-labelledby="plan-steps-title" hidden>
             <div class="section-heading">
-              <h3 id="usage-title" tabindex="-1" data-i18n>方案时间线</h3>
+              <h3 id="plan-steps-title" data-i18n>操作步骤</h3>
               <span id="plan-steps-hours" hidden></span>
             </div>
             <p id="usage-scenario" class="usage-scenario"></p>
-            <figure class="plan-chart" id="plan-chart" aria-label="用卡和续订时间分布" data-i18n data-i18n-attribute="aria-label">
-              <div class="plan-chart-grid">
-                <div class="plan-chart-labels" id="plan-chart-labels" aria-hidden="true"></div>
-                <div class="plan-chart-plot">
-                  <div class="plan-chart-folds" id="plan-chart-folds" aria-hidden="true"></div>
-                  <div class="plan-chart-tracks" id="plan-chart-tracks"></div>
-                </div>
-                <div class="plan-chart-axis" id="plan-chart-axis" aria-hidden="true"></div>
-              </div>
-              <figcaption class="plan-chart-note" id="plan-chart-note" hidden>
-                <span class="plan-chart-swatch" aria-hidden="true"></span>
-                <span data-i18n>斜纹表示压缩显示的长间隔</span>
-              </figcaption>
-              <div class="plan-chart-tooltip" id="plan-chart-tooltip" role="tooltip" hidden>
-                <strong id="plan-chart-tooltip-title" aria-hidden="true"></strong>
-                <span id="plan-chart-tooltip-time"></span>
-                <span id="plan-chart-tooltip-quota" hidden></span>
-              </div>
-            </figure>
             <ol class="plan-sequence" id="plan-steps-list" role="list"></ol>
             <details class="usage-details" id="usage-details">
               <summary id="usage-summary" data-i18n>刷新与时段用量</summary>

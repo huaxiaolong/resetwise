@@ -790,9 +790,10 @@
 
   function renderPlanDetail(result, input, actions) {
     hideChartTooltip();
-    const panel = get('plan-detail');
-    panel.hidden = result.start >= result.end;
-    if (panel.hidden) return;
+    const expired = result.start >= result.end;
+    get('plan-detail').hidden = expired;
+    get('plan-breakdown').hidden = expired;
+    if (expired) return;
 
     const exampleNote = get('usage-scenario');
     exampleNote.hidden = result.cards.length < 2;
