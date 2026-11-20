@@ -150,3 +150,62 @@ test('rejects invalid time zones, expired references and unknown operations', as
   assert.equal(invalidPlan.status, 400);
   assert.equal((await post({ operation: 'unknown' })).status, 400);
 });
+
+test('bounds card and announcement counts before running the planner', async () => {
+  const input = { ...example, subscription: { ...example.subscription, end: example.snapshot, graceDays: 0, renew: false },
+    cards: Array.from({ length: 16 }, (_, index) => card(example.snapshot + 1, index + 1)),
+    resets: Array.from({ length: 3 }, (_, index) => ({ at: example.snapshot + index + 1 })) };
+  assert.equal((await solve(input)).total, 0);
+
+  const tooManyCards = { ...input, cards: [...input.cards, card(example.snapshot + 1, 17)] };
+  const tooManyResets = { ...input, resets: [...input.resets, { at: example.snapshot + 4 }] };
+  for (const [oversized, field, message] of [
+    [tooManyCards, 'add-card', '最多可安排 16 张重置卡。'],
+    [tooManyResets, 'add-reset', '最多可添加 3 条自动重置公告。'],
+  ]) {
+    const response = await post({ operation: 'plan', input: oversized });
+    assert.equal(response.status, 400);
+    assert.deepEqual(await response.json(), { field, message });
+  }
+});
+
+test('reports an exhausted search budget without returning a final plan', async t => {
+  let time = 100;
+  t.mock.method(performance, 'now', () => time);
+  t.mock.method(planner, 'planReset', function* () {
+    time += 5000;
+    yield;
+    assert.fail('Search should stop at the budget');
+  });
+
+  const response = await post({ operation: 'plan', input: example });
+  const frames = (await response.text()).trim().split('\n').map(line => JSON.parse(line));
+  assert.equal(response.status, 200);
+  assert.deepEqual(frames.map(frame => frame.type), ['error']);
+  assert.match(frames[0].value.message, /计算超时/);
+});
+
+test('reports a failed direction, keeps confirmed results, and allows a retry', async t => {
+  const original = await solve(example);
+  const alternate = planner.alternatePlan;
+  let fail = true;
+  t.mock.method(console, 'error', () => {});
+  t.mock.method(planner, 'alternatePlan', function* (input, result, action, direction, options) {
+    if (fail && action === 3 && direction === 1) throw new Error('Simulated search failure');
+    return yield* alternate(input, result, action, direction, options);
+  });
+
+  const later = { action: 3, direction: 1 };
+  const earlier = { action: 1, direction: -1 };
+  const search = jobs => receive({ operation: 'choices', plan: original.planToken, jobs });
+  const failed = await search([later, earlier]);
+  const failure = failed.find(frame => frame.value?.action === 3).value;
+  assert.equal(failure.direction, 1);
+  assert.equal('choice' in failure, false);
+  assert.match(failure.error.message, /请重试/);
+  assert.deepEqual(failed.find(frame => frame.value?.action === 1).value, { ...earlier, choice: null });
+
+  fail = false;
+  const retried = await search([later]);
+  assert.equal(typeof retried[0].value.choice, 'string');
+});

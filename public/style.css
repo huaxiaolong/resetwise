@@ -356,7 +356,7 @@ details[open] > summary::after { transform: rotate(225deg) translate(-1px, -1px)
 .plan-adjustment { flex: 1 0 100%; min-width: 0; margin-block: 5px 3px; padding: 10px; border-radius: 8px; background: #f7f4ff; color: var(--ink); }
 .adjustment-controls { display: flex; align-items: center; gap: 5px; flex-wrap: wrap; }
 .plan-adjustment .button { min-height: 34px; padding: 4px 9px; font-size: .79rem; }
-.plan-adjustment .button:disabled { border-color: var(--line); background: #eeebf3; color: #70687d; cursor: default; opacity: .75; }
+.add-button:disabled, .plan-adjustment .button:disabled { border-color: var(--line); background: #eeebf3; color: #70687d; cursor: default; opacity: .75; }
 .adjustment-close { margin-inline-start: auto; }
 .adjustment-message { color: var(--muted); font-size: .79rem; line-height: 1.4; }
 .adjustment-message:not(:empty) { margin-block-start: 8px; }

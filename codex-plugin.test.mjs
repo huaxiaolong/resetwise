@@ -61,6 +61,29 @@ test('plans iOS subscriptions without grace days or a required subscription chan
   assert.ok(buildInput(expired, { subscription: { ...subscription, graceDays: 3 } }).input);
 });
 
+test('uses hosted planning by default and accepts a configured local service', async t => {
+  const savedOrigin = process.env.RESETWISE_BASE_URL;
+  t.after(() => {
+    if (savedOrigin === undefined) delete process.env.RESETWISE_BASE_URL;
+    else process.env.RESETWISE_BASE_URL = savedOrigin;
+  });
+  delete process.env.RESETWISE_BASE_URL;
+
+  const liveFetch = globalThis.fetch;
+  const request = t.mock.method(globalThis, 'fetch', (url, options) =>
+    liveFetch(new URL(new URL(url).pathname, origin), options));
+  const input = { usage: usage('prolite', null), settings: { subscription } };
+
+  const hosted = await first(input);
+  assert.equal(request.mock.calls[0].arguments[0], 'https://codex-resetwise.vercel.app/api/plan');
+  assert.equal(new URL(hosted.url).origin, 'https://codex-resetwise.vercel.app');
+
+  process.env.RESETWISE_BASE_URL = origin;
+  const local = await first(input);
+  assert.equal(request.mock.calls[1].arguments[0], origin + '/api/plan');
+  assert.equal(new URL(local.url).origin, origin);
+});
+
 test('makes a zero-grace plan and finds a later window with the same quota', async () => {
   const original = await first({ usage: usage('plus', short), settings: { subscription } }, origin);
   assert.equal(original.total, 888);
@@ -107,4 +130,26 @@ test('can still make a weekly-only plan when there are zero available cards', as
   assert.equal(plan.context.input.short, null);
   assert.equal(plan.context.input.cards.length, 0);
   assert.equal(plan.total, plan.baseline);
+});
+
+test('reports an incomplete alternative search and can retry it', async t => {
+  const plan = await first({ usage: usage('plus', short), settings: { subscription } }, origin);
+  const liveFetch = globalThis.fetch;
+  let fail = true;
+  t.mock.method(globalThis, 'fetch', (url, options) => {
+    if (!fail) return liveFetch(url, options);
+    const request = JSON.parse(options.body);
+    assert.equal(request.operation, 'choices');
+    assert.deepEqual(request.jobs, [{ action: 3, direction: 1 }]);
+    const frames = [
+      { type: 'progress', value: { action: 3, direction: 1, error: { message: 'Could not check this time window.' } } },
+      { type: 'result', value: null },
+    ];
+    return new Response(frames.map(frame => JSON.stringify(frame) + '\n').join(''));
+  });
+
+  const next = { context: plan.context, action: 3, direction: 1 };
+  await assert.rejects(more(next), /Could not check this time window/);
+  fail = false;
+  assert.equal((await more(next)).total, plan.total);
 });

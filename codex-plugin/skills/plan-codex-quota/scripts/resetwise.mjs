@@ -106,9 +106,11 @@ export function buildInput(usage, settings = {}) {
   } };
 }
 
-function siteOrigin(value = process.env.RESETWISE_BASE_URL ?? 'http://127.0.0.1:3000') {
+const hostedOrigin = 'https://codex-resetwise.vercel.app';
+
+function siteOrigin(value = process.env.RESETWISE_BASE_URL ?? hostedOrigin) {
   const site = new URL(value);
-  if (site.origin === 'https://codex-resetwise.vercel.app'
+  if (site.origin === hostedOrigin
     || (site.protocol === 'http:' && ['127.0.0.1', 'localhost'].includes(site.hostname))) return site.origin;
   throw new Error('Use the Resetwise Vercel site or a local Resetwise server.');
 }
@@ -118,7 +120,10 @@ async function request(origin, operation) {
     method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(operation),
     redirect: 'error', signal: AbortSignal.timeout(300_000),
   });
-  if (!response.ok) throw new Error((await response.json()).message ?? 'Resetwise rejected the request.');
+  if (!response.ok) {
+    const problem = await response.json().catch(() => null);
+    throw new Error(problem?.message ?? 'Resetwise rejected the request.');
+  }
   const frames = (await response.text()).trim().split('\n').map(line => JSON.parse(line));
   const end = frames.at(-1);
   if (end.type !== 'result') throw new Error(end.value?.message ?? 'Resetwise did not return a complete plan.');
@@ -180,15 +185,21 @@ export async function more({ context, action, direction }) {
   if (jobs.length) {
     const frames = await request(origin, { operation: 'choices', plan: context.token, jobs });
     const choices = frames.filter(frame => frame.type === 'progress').map(frame => frame.value);
+    let failure;
     for (const job of jobs) {
-      const candidate = choices.find(choice => choice.action === job.action && choice.direction === job.direction)?.choice;
-      if (!candidate) continue;
-      const response = await request(origin, { operation: 'describe', plan: context.token, candidate });
+      const choice = choices.find(choice => choice.action === job.action && choice.direction === job.direction);
+      if (choice?.choice === null) continue;
+      if (typeof choice?.choice !== 'string') {
+        failure ??= choice?.error?.message ?? 'Could not check all alternative time windows. Try again.';
+        continue;
+      }
+      const response = await request(origin, { operation: 'describe', plan: context.token, candidate: choice.choice });
       const result = response.at(-1).value;
       if (Math.abs(result.total - context.total) <= 1e-7 && !context.seen.includes(planKey(result))) {
         return present(result, context.input, origin, context.seen);
       }
     }
+    if (failure) throw new Error(failure);
   }
   return { exhausted: true };
 }

@@ -2,8 +2,10 @@ import { createHmac, randomBytes, timingSafeEqual } from 'node:crypto';
 import { setImmediate as pause } from 'node:timers/promises';
 import planner from '../planner.js';
 
-const { planReset, alternatePlan, describeAlternative } = planner;
 const REQUEST_LIMIT = 256 * 1024;
+const MAX_CARDS = 16;
+const MAX_RESETS = 3;
+const SEARCH_BUDGET = 5_000;
 const DAY = 1440;
 // shortcut: 本地单进程使用随机密钥，部署多个实例时需设置同一个 RESETWISE_PLAN_SECRET。
 const signingKey = process.env.RESETWISE_PLAN_SECRET || randomBytes(32);
@@ -25,6 +27,15 @@ const minute = value => Number.isSafeInteger(value) && Math.abs(value) < 144_000
 
 function requireInput(condition, field) {
   if (!condition) throw invalid(field);
+}
+
+function checkPlanningSize(cards, resets) {
+  if (cards.length > MAX_CARDS) {
+    throw new RequestError(400, `最多可安排 ${MAX_CARDS} 张重置卡。`, 'add-card');
+  }
+  if (resets.length > MAX_RESETS) {
+    throw new RequestError(400, `最多可添加 ${MAX_RESETS} 条自动重置公告。`, 'add-reset');
+  }
 }
 
 async function readRequest(request) {
@@ -74,6 +85,7 @@ function inputForPlan(input) {
   }
   requireInput(object(card) && typeof card.restart === 'boolean', 'card-preserve');
   requireInput(Array.isArray(cards) && Array.isArray(resets));
+  checkPlanningSize(cards, resets);
 
   return {
     timeZone: zone, snapshot, mode, hours: mode === 'healthy' ? hours : [],
@@ -121,15 +133,16 @@ function withToken(input, plan) {
 
 function* prepareChoices({ input, result, signature: parent }, jobs) {
   const pending = jobs.map(({ action, direction }) => ({
-    action, direction, search: alternatePlan(input, result, action, direction, { prepare: true }),
+    action, direction, search: planner.alternatePlan(input, result, action, direction, { prepare: true }),
   }));
   while (pending.length) {
     for (let index = 0; index < pending.length;) {
       const { action, direction, search } = pending[index];
       let step;
       try { step = search.next(); } catch (error) {
-        console.error(error);
-        step = { done: true, value: null };
+        pending.splice(index, 1);
+        yield { action, direction, error: calculationError(error) };
+        continue;
       }
       if (!step.done) {
         index++;
@@ -148,11 +161,12 @@ function operationFor(body) {
   requireInput(object(body));
   if (body.operation === 'plan') {
     const input = inputForPlan(body.input);
-    return { input, search: planReset(input), result: plan => withToken(input, plan) };
+    return { input, search: planner.planReset(input), result: plan => withToken(input, plan) };
   }
   requireInput(body.operation === 'choices' || body.operation === 'describe');
   const context = open(body.plan, 'plan');
   const { input, result } = context;
+  checkPlanningSize(input.cards, input.resets);
   if (body.operation === 'choices') {
     const actions = result.cards.map(card => card.number);
     if (result.renewal) actions.push('renewal');
@@ -162,20 +176,24 @@ function operationFor(body) {
   }
   const { parent, action, candidate } = open(body.candidate, 'choice');
   requireInput(parent === context.signature);
-  return { input, search: describeAlternative(input, result, action, candidate), result: plan => withToken(input, plan) };
+  return { input, search: planner.describeAlternative(input, result, action, candidate), result: plan => withToken(input, plan) };
 }
 
-function nextBatch(search, timeZone) {
+function nextBatch(search, timeZone, deadline) {
   const previous = process.env.TZ;
   if (previous !== timeZone) process.env.TZ = timeZone;
   try {
     // Only advance the synchronous generator while the request time zone is installed.
-    const until = performance.now() + 12;
-    do {
+    let now = performance.now();
+    const yieldAt = now + 12;
+    while (now < deadline) {
       const step = search.next();
+      now = performance.now();
+      if (now >= deadline) break;
       if (step.done || step.value !== undefined) return step;
-    } while (performance.now() < until);
-    return { done: false };
+      if (now >= yieldAt) return { done: false };
+    }
+    throw new RequestError(503, '计算超时，请缩小规划范围后重试。');
   } finally {
     if (previous === undefined) delete process.env.TZ;
     else if (previous !== timeZone) process.env.TZ = previous;
@@ -193,12 +211,13 @@ function calculationError(error) {
 function streamResult({ input, search, result }, signal) {
   const encode = new TextEncoder();
   const frame = (type, value) => encode.encode(JSON.stringify({ type, value }) + '\n');
+  const deadline = performance.now() + SEARCH_BUDGET;
   let cancelled = false;
   const stream = new ReadableStream({
     async pull(controller) {
       try {
         while (!cancelled && !signal.aborted) {
-          const step = nextBatch(search, input.timeZone);
+          const step = nextBatch(search, input.timeZone, deadline);
           if (step.done) {
             controller.enqueue(frame('result', result(step.value)));
             break;

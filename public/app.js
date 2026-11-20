@@ -3,13 +3,17 @@
 
   const MINUTE = 60_000;
   const DAY = 24 * 60;
+  const MAX_RESETS = 3;
   const EPSILON = 1e-7;
   const SERVICE_ERROR = '计算服务暂时不可用，请重试。';
+  const failedChoice = { error: '备选时段检查失败，可以重试。' };
+  const canAdjust = choice => Boolean(choice && !choice.pending);
   const copy = window.ResetwiseCopy;
   const { t } = copy;
   const get = id => document.getElementById(id);
   const form = get('settings');
   const announcements = get('announcements');
+  const addReset = get('add-reset');
   const cardFields = get('cards');
   const resultBody = get('result-body');
   const resultStatus = get('result-status');
@@ -121,7 +125,8 @@
     if (ios) subscriptionNotes.push(grace > 0 ? t('iOS · +{days} 天', { days: grace }) : 'iOS');
     if (renew) subscriptionNotes.push(days ? t('续订 {days} 天', { days }) : t('按月续订'));
     text('subscription-note', subscriptionNotes.join(' · '));
-    text('reset-note', count ? t('{count} 项', { count }) : t('暂无'));
+    text('reset-note', `${count} / ${MAX_RESETS}`);
+    addReset.disabled = count >= MAX_RESETS;
     [...announcements.children].forEach((row, index) => {
       row.querySelector('legend').textContent = t('公告 {number}', { number: index + 1 });
       row.querySelector('button').setAttribute('aria-label', t('移除公告 {number}', { number: index + 1 }));
@@ -136,6 +141,11 @@
   }
 
   function formInput() {
+    const extraReset = announcements.children[MAX_RESETS];
+    if (extraReset) {
+      throw Object.assign(new RangeError(`最多可添加 ${MAX_RESETS} 条自动重置公告。`),
+        { field: extraReset.querySelector('[data-key="time"]').id });
+    }
     for (const field of form.elements) {
       if (!field.willValidate || field.validity.valid) continue;
       let message = '请检查此项的值。';
@@ -208,7 +218,8 @@
     row.querySelector('button').addEventListener('click', () => {
       row.remove();
       changed();
-      get('add-reset').focus();
+      const target = addReset.disabled ? announcements.lastElementChild.querySelector('button') : addReset;
+      target.focus();
     });
     copy.apply(row);
     announcements.append(row);
@@ -321,8 +332,10 @@
     let trigger;
     for (const button of ticketActions.querySelectorAll('.ticket-adjust')) {
       const choices = activeChoices?.get(button.dataset.action);
-      button.hidden = !choices?.[-1] && !choices?.[1];
-      const open = !button.hidden && button.dataset.action === String(adjustment?.action);
+      const selected = button.dataset.action === String(adjustment?.action);
+      const checking = selected && (choices?.[-1]?.pending || choices?.[1]?.pending);
+      button.hidden = !checking && !canAdjust(choices?.[-1]) && !canAdjust(choices?.[1]);
+      const open = !button.hidden && selected;
       button.setAttribute('aria-expanded', String(open));
       if (open) trigger = button;
     }
@@ -336,16 +349,22 @@
 
     const { pending, preview, message } = adjustment;
     const sides = (preview?.choices ?? activeChoices).get(trigger.dataset.action);
-    for (const [direction, id] of [[-1, 'adjust-earlier'], [1, 'adjust-later']]) {
+    for (const [direction, id, label, retry] of [
+      [-1, 'adjust-earlier', '更早', '重试更早'], [1, 'adjust-later', '更晚', '重试更晚'],
+    ]) {
       const button = get(id);
-      button.disabled = pending || !sides[direction];
+      const choice = sides[direction];
+      button.disabled = pending || !canAdjust(choice);
+      button.textContent = t(choice?.error ? retry : label);
     }
     get('adjust-preview').hidden = !preview;
     get('adjust-use').disabled = pending;
     const feedback = preview ? [t('可用额度仍为 {value}', { value: quotaPercent(preview.result.total) })] : [];
+    const failure = sides[-1]?.error ?? sides[1]?.error;
     if (pending) feedback.push(t('正在载入备选方案…'));
     else if (message) feedback.push(t(message));
-    else if (sides[-1] === undefined || sides[1] === undefined) feedback.push(t('正在检查其他时段…'));
+    else if (sides[-1]?.pending || sides[1]?.pending) feedback.push(t('正在检查其他时段…'));
+    else if (failure) feedback.push(t(failure));
     text('adjust-message', feedback.join(' · '));
     if (!preview) return;
 
@@ -374,26 +393,37 @@
     drawAdjustment();
   }
 
-  function prepareChoices(result, actions, choices, isCurrent) {
+  function prepareChoices(result, actions, choices, isCurrent, directions = [-1, 1]) {
     const jobs = [];
+    const pending = { pending: true };
     for (const action of actions) {
       const key = String(action);
       if (!choices.has(key)) choices.set(key, {});
       const sides = choices.get(key);
-      for (const direction of [-1, 1]) {
-        if (sides[direction] === undefined) jobs.push({ action, direction });
+      for (const direction of directions) {
+        if (sides[direction] !== undefined) continue;
+        sides[direction] = pending;
+        jobs.push({ action, direction });
       }
     }
     if (!jobs.length) return;
-    requestPlan({ operation: 'choices', plan: result.planToken, jobs }, isCurrent, drawAdjustment, error => {
+    function finish(error) {
+      const failure = error?.message ? { error: error.message } : failedChoice;
       for (const { action, direction } of jobs) {
         const sides = choices.get(String(action));
-        if (sides[direction] === undefined) sides[direction] = null;
+        if (sides[direction] === pending) sides[direction] = failure;
       }
-      console.error(error);
       drawAdjustment();
-    }, ({ action, direction, choice }) => {
-      choices.get(String(action))[direction] = choice ? { candidate: choice } : null;
+    }
+    requestPlan({ operation: 'choices', plan: result.planToken, jobs }, isCurrent, finish, error => {
+      console.error(error);
+      finish(error);
+    }, ({ action, direction, choice, error }) => {
+      const sides = choices.get(String(action));
+      if (sides?.[direction] !== pending) return;
+      if (error) sides[direction] = error.message ? { error: error.message } : failedChoice;
+      else if (typeof choice === 'string') sides[direction] = { candidate: choice };
+      else sides[direction] = choice === null ? null : failedChoice;
       drawAdjustment();
     });
   }
@@ -407,7 +437,7 @@
 
   function toggleAdjustment(action) {
     const choices = activeChoices?.get(String(action));
-    if (!choices?.[-1] && !choices?.[1]) return;
+    if (adjustment?.action !== action && !canAdjust(choices?.[-1]) && !canAdjust(choices?.[1])) return;
     adjustment = adjustment?.action === action ? null : { action, preview: null, pending: false };
     drawAdjustment();
   }
@@ -425,11 +455,21 @@
     const { result } = lastPlan;
     const key = String(edit.action);
     const base = edit.preview?.result ?? result;
-    const choice = (edit.preview?.choices ?? activeChoices).get(key)?.[direction];
-    if (!choice) return;
+    const choices = edit.preview?.choices ?? activeChoices;
+    const sides = choices.get(key);
+    const choice = sides?.[direction];
+    if (!canAdjust(choice)) return;
     const navigation = get(direction < 0 ? 'adjust-earlier' : 'adjust-later');
     const restoreFocus = document.activeElement === navigation;
     edit.message = '';
+
+    if (choice.error) {
+      sides[direction] = undefined;
+      prepareChoices(base, [edit.action], choices,
+        () => activeChoices === choices || adjustment?.preview?.choices === choices, [direction]);
+      drawAdjustment();
+      return;
+    }
 
     function showAlternate(alternate) {
       edit.pending = false;
@@ -437,10 +477,10 @@
         edit.preview = null;
       } else {
         // The plan we just came from is already a verified choice in the reverse direction.
-        const choices = new Map([[key, { [-direction]: { result: base } }]]);
-        const preview = { result: alternate, choices };
+        const nextChoices = new Map([[key, { [-direction]: { result: base } }]]);
+        const preview = { result: alternate, choices: nextChoices };
         edit.preview = preview;
-        prepareChoices(alternate, [edit.action], choices, () => adjustment?.preview === preview);
+        prepareChoices(alternate, [edit.action], nextChoices, () => activeChoices === nextChoices || adjustment?.preview === preview);
       }
       drawAdjustment();
       if (restoreFocus && (document.activeElement === document.body || document.activeElement === navigation)) {
@@ -1018,7 +1058,7 @@
   form.addEventListener('change', event => {
     if (event.target.name === 'mode' && !resultBody.hidden) calculate();
   });
-  get('add-reset').addEventListener('click', () => {
+  addReset.addEventListener('click', () => {
     const input = addAnnouncement();
     changed();
     input.focus();
