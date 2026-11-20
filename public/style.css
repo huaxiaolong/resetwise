@@ -383,7 +383,6 @@ details[open] > summary::after { transform: rotate(225deg) translate(-1px, -1px)
 .plan-chart-bar { left: clamp(0px, var(--chart-at), calc(100% - 7px)); width: max(7px, var(--chart-width)); }
 .plan-chart-bar::before { inset-inline: 0; height: 9px; border-radius: 4px; transform: translateY(-50%); }
 .plan-chart-bar::after { position: absolute; inset-block: 0; left: 50%; width: max(100%, 24px); transform: translateX(-50%); content: ""; }
-.plan-chart-bar.renewal::before { border: 1.5px solid var(--mark-ink); background: #dcf2e9; }
 .plan-chart-bar.routine::before { height: 7px; background: #baaed8; }
 .plan-chart-point { left: clamp(5px, var(--chart-at), calc(100% - 5px)); width: 24px; transform: translate(-50%, -50%); }
 .plan-chart-point::before { left: 50%; width: 9px; height: 9px; border-radius: 2px; transform: translate(-50%, -50%) rotate(45deg); box-shadow: 0 0 0 2px #fcfbff; }
@@ -473,7 +472,7 @@ details[open] > summary::after { transform: rotate(225deg) translate(-1px, -1px)
     border-color: CanvasText;
     background: var(--mark-fill, CanvasText);
   }
-  .plan-chart-mark::before, .plan-chart-bar.renewal::before, .plan-chart-bar.routine::before { forced-color-adjust: none; background: CanvasText; }
+  .plan-chart-mark::before, .plan-chart-bar.routine::before { forced-color-adjust: none; background: CanvasText; }
   .plan-chart-tooltip { border: 1px solid CanvasText; }
   .plan-chart-fold, .plan-chart-swatch { border-color: CanvasText; }
 }

@@ -297,6 +297,7 @@
   }
 
   const cardName = number => t('第 {number} 张重置卡', { number });
+  const renewalLabel = kind => t(kind === 'restart' ? '转免费后重新订阅' : '连续续订');
   const gainHundredths = gain => Math.sign(gain) * Math.round(Math.abs(gain) * 100);
 
   function cardGainLabel(gain) {
@@ -324,11 +325,11 @@
     const renewal = result.renewal;
     if (renewal) {
       const restart = renewal.kind === 'restart';
-      actions.push({ key: 'renewal', at: renewal.at, title: t(restart ? '转免费后重新订阅' : '连续续订'),
-        value: restart ? t('{time} 起', { time: dateLabel(renewal.at) }) : windowLabel(renewal.window),
+      actions.push({ key: 'renewal', at: restart ? renewal.at : null, title: renewalLabel(renewal.kind),
+        value: restart ? t('{time} 起', { time: dateLabel(renewal.at) }) : '',
         detail: t(restart ? '若已开启自动续订，先关闭。确认转为免费后再订阅。' : '额度与刷新时间沿用原周期。') });
     }
-    return actions.sort((left, right) => left.at - right.at);
+    return actions.sort((left, right) => (left.at ?? Infinity) - (right.at ?? Infinity));
   }
 
   function drawAdjustment() {
@@ -360,7 +361,12 @@
       const button = get(id);
       const choice = sides[direction];
       button.disabled = pending || !canAdjust(choice);
-      button.textContent = t(choice?.error ? retry : label);
+      if (adjustment.action === 'renewal') {
+        const method = renewalLabel(direction < 0 ? 'continue' : 'restart');
+        button.textContent = choice?.error ? t('重试 · {action}', { action: method }) : method;
+      } else {
+        button.textContent = t(choice?.error ? retry : label);
+      }
     }
     get('adjust-preview').hidden = !preview;
     get('adjust-use').disabled = pending;
@@ -381,11 +387,11 @@
     if (preview.result.end !== lastPlan.result.end) {
       changes.push({ title: t('订阅可用至'), value: dateLabel(preview.result.end) });
     }
-    get('adjust-changes').replaceChildren(...changes.flatMap(({ title, value, gain }) => {
+    get('adjust-changes').replaceChildren(...changes.flatMap(({ title, value, gain, detail }) => {
       const name = document.createElement('dt');
       const time = document.createElement('dd');
       name.textContent = title;
-      time.textContent = value;
+      time.textContent = value || detail || '';
       if (gain) time.append(document.createElement('br'), gain);
       return [name, time];
     }));
@@ -690,10 +696,8 @@
       key: number, label: t('第 {number} 张', { number }), kind: 'card', start: window.start,
       end: Math.min(window.end + 1, end),
     }));
-    if (renewal) {
-      const window = renewal.window;
-      periods.push({ key: 'renewal', label: t('续订'), kind: 'renewal', start: window?.start ?? renewal.at,
-        end: window ? Math.min(window.end + 1, end) : renewal.at });
+    if (renewal?.kind === 'restart') {
+      periods.push({ key: 'renewal', label: t('续订'), kind: 'renewal', start: renewal.at, end: renewal.at });
     }
     periods.sort((left, right) => left.start - right.start);
     const { folds, position } = chartScale(start, end, periods);
@@ -764,8 +768,9 @@
       events.push({ at: input.long.start, type: 'start', title: t('本轮周额度开始') });
     }
     for (const event of result.events) {
+      if (event.type === 'renewal' && event.kind === 'continue') continue;
       const title = t({ cycle: '{quota}刷新', announced: '公告重置 · {quota}', card: '使用第 {number} 张重置卡重置额度',
-        lapse: '转为免费', renewal: event.kind === 'restart' ? '重新订阅 · 额度重置' : '连续续订' }[event.type], {
+        lapse: '转为免费', renewal: '重新订阅 · 额度重置' }[event.type], {
         quota: scopeText(event.scope), number: event.number,
       });
       events.push({ ...event, type: event.type === 'cycle' && event.scope === 2 ? 'short' : event.type, title });
@@ -793,7 +798,7 @@
     exampleNote.hidden = result.cards.length < 2;
     exampleNote.textContent = t('每张卡的时段以其他操作按示例时刻为准。');
     renderPlanChart(result, actions);
-    renderPlanTimeline(result, input, actions);
+    renderPlanTimeline(result, input, actions.filter(action => action.at !== null));
     if (usageDetails.open) renderUsageDetails(result, input);
   }
 
@@ -817,8 +822,9 @@
       adjust.type = 'button';
       adjust.className = 'ticket-adjust';
       adjust.dataset.action = action.key;
-      adjust.textContent = t('调整');
-      adjust.setAttribute('aria-label', t('调整时段 · {action}', { action: action.title }));
+      const renewal = action.key === 'renewal';
+      adjust.textContent = t(renewal ? '更换续订方式' : '调整');
+      if (!renewal) adjust.setAttribute('aria-label', t('调整时段 · {action}', { action: action.title }));
       adjust.setAttribute('aria-controls', adjustmentPanel.id);
       adjust.addEventListener('click', () => toggleAdjustment(action.key));
       label.textContent = action.title;
@@ -830,6 +836,7 @@
         label.append(gain);
       }
       value.textContent = action.value;
+      value.hidden = !action.value;
       timing.append(value, adjust);
       row.append(label, timing);
       return row;
