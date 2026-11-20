@@ -14,6 +14,7 @@
   const form = get('settings');
   const announcements = get('announcements');
   const addReset = get('add-reset');
+  const continuousOnly = get('renew-continuous-only');
   const cardFields = get('cards');
   const resultBody = get('result-body');
   const resultStatus = get('result-status');
@@ -123,7 +124,10 @@
     text('short-note', t(short ? '已启用' : '未启用'));
     const subscriptionNotes = [];
     if (ios) subscriptionNotes.push(grace > 0 ? t('iOS · +{days} 天', { days: grace }) : 'iOS');
-    if (renew) subscriptionNotes.push(days ? t('续订 {days} 天', { days }) : t('按月续订'));
+    if (renew) {
+      const term = days ? t('续订 {days} 天', { days }) : t('按月续订');
+      subscriptionNotes.push(continuousOnly.checked ? t('只连续续订') : term);
+    }
     text('subscription-note', subscriptionNotes.join(' · '));
     text('reset-note', `${count} / ${MAX_RESETS}`);
     addReset.disabled = count >= MAX_RESETS;
@@ -175,6 +179,7 @@
         channel: get('subscription-ios').checked ? 'ios' : 'web',
         graceDays: get('grace-days').disabled ? 0 : number('grace-days'),
         renew: get('subscription-renew').checked,
+        allowLapse: continuousOnly.disabled || !continuousOnly.checked,
         renewDays: get('renew-days').value ? number('renew-days') : null,
         billingDay: billingDay.disabled || !billingDay.value ? null : billingDay.valueAsNumber,
       },
@@ -319,7 +324,7 @@
     const renewal = result.renewal;
     if (renewal) {
       const restart = renewal.kind === 'restart';
-      actions.push({ key: 'renewal', at: renewal.at, title: t(restart ? '转免费后重新订阅' : '无缝续订'),
+      actions.push({ key: 'renewal', at: renewal.at, title: t(restart ? '转免费后重新订阅' : '连续续订'),
         value: restart ? t('{time} 起', { time: dateLabel(renewal.at) }) : windowLabel(renewal.window),
         detail: t(restart ? '若已开启自动续订，先关闭。确认转为免费后再订阅。' : '额度与刷新时间沿用原周期。') });
     }
@@ -760,7 +765,7 @@
     }
     for (const event of result.events) {
       const title = t({ cycle: '{quota}刷新', announced: '公告重置 · {quota}', card: '使用第 {number} 张重置卡重置额度',
-        lapse: '转为免费', renewal: event.kind === 'restart' ? '重新订阅 · 额度重置' : '无缝续订' }[event.type], {
+        lapse: '转为免费', renewal: event.kind === 'restart' ? '重新订阅 · 额度重置' : '连续续订' }[event.type], {
         quota: scopeText(event.scope), number: event.number,
       });
       events.push({ ...event, type: event.type === 'cycle' && event.scope === 2 ? 'short' : event.type, title });
@@ -1003,6 +1008,7 @@
       write('awake-end', clock(hours[1]));
       get('subscription-ios').checked = subscription.channel === 'ios';
       get('subscription-renew').checked = subscription.renew === true;
+      continuousOnly.checked = subscription.allowLapse === false;
       write('grace-days', subscription.graceDays);
       write('renew-days', subscription.renewDays);
       write('billing-day', subscription.billingDay);

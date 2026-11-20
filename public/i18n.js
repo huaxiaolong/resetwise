@@ -22,6 +22,7 @@
     '第 {number} 张到期': 'Card {number} expires',
     '移除第 {number} 张重置卡': 'Remove reset card {number}',
     '规划续订': 'Plan to renew',
+    '只连续续订': 'Continuous renewal only',
     '下一期订阅天数（选填）': 'Next term in days (optional)',
     '留空按月': 'Leave blank for monthly renewal',
     '原续订日（选填）': 'Original monthly billing day (optional)',
@@ -116,7 +117,7 @@
     '可用期结束': 'Access ends',
     '转为免费': 'Switches to free',
     '续订': 'Renewal',
-    '无缝续订': 'Renew without interruption',
+    '连续续订': 'Renew without interruption',
     '转免费后重新订阅': 'Resubscribe after switching to free',
     '若已开启自动续订，先关闭。确认转为免费后再订阅。': 'Turn off auto-renew if enabled. Resubscribe once the account is free.',
     '额度与刷新时间沿用原周期。': 'Quota and refresh times stay on the current cycles.',
@@ -182,7 +183,7 @@
     '请填写整数。': 'Enter a whole number.',
     '请输入精确到分钟的时间。': 'Enter a time to the nearest minute.',
     '计算失败。请检查输入后重新计算。': 'Calculation failed. Check your inputs and try again.',
-    '请填写 1 至 365 天。': 'Enter 1 to 365 days.',
+    '请填写 1 至 366 天。': 'Enter 1 to 366 days.',
     '请填写 1 至 31 日。': 'Enter a billing day from 1 to 31.',
     '找不到可续订的使用时段。': 'No usable renewal window was found.',
     '请填写有效的重置卡到期时间。': 'Enter a valid reset card expiry.',
@@ -192,7 +193,7 @@
     '5 小时额度未满时，请填写当前窗口的刷新时间。': 'If the 5-hour quota is below full, enter its next refresh time.',
     '5 小时额度的刷新时间需要晚于推演起点。': 'The next 5-hour refresh must be after the projection starts.',
     '健康模式的起止时间需要不同。全天可用时可选择极限使用。': 'Choose different start and end times in Healthy mode. Select Extreme mode for 24-hour use.',
-    '单次最多推演 400 天（含宽限期）。': 'Each projection can cover up to 400 days, including the grace period.',
+    '当前订阅最多可推演 400 天（含宽限期）。': 'The current term can cover up to 400 days, including the grace period.',
   };
 
   const LANGUAGE_KEY = 'resetwise.language';

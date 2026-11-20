@@ -213,9 +213,9 @@
     return recommendation;
   }
 
-  function validateCycles(input, start, active) {
+  function validateCycles(input, start, end) {
     const { long, short } = input;
-    if (active) {
+    if (end > start) {
       requireInput(long.start == null || long.start <= start, 'long-start', '本轮周额度的开始时间需要早于或等于推演起点。');
       requireInput(long.end > start, 'long-end', '周额度下次刷新时间需要晚于推演起点。');
       requireInput(!short || short.end !== null || short.remaining === 100,
@@ -225,6 +225,7 @@
     }
     requireInput(input.mode !== 'healthy' || input.hours[0] !== input.hours[1],
       'awake-end', '健康模式的起止时间需要不同。全天可用时可选择极限使用。');
+    requireInput(end - start <= 400 * DAY, 'subscription-end', '当前订阅最多可推演 400 天（含宽限期）。');
   }
 
   function makeModel(input, start, end, interruption) {
@@ -264,9 +265,7 @@
       return { start, end, at: null, window: null, total: 0, baseline: 0, reason: 'expired', events: [], usageWindows: [] };
     }
 
-    validateCycles(input, start, true);
-    // shortcut: 单次推演覆盖一年和宽限期，多年场景需要分段搜索或优化后缀计算。
-    requireInput(end - start <= 400 * DAY, 'subscription-end', '单次最多推演 400 天（含宽限期）。');
+    validateCycles(input, start, end);
 
     const model = makeModel(input, start, end);
     const scoreAfterCard = makeScorer ? makeScorer(model, advance) : state => {
@@ -347,8 +346,8 @@
     const { subscription } = input;
     if (!subscription.renew) return [{ end: currentEnd, renewal: null }];
     const { renewDays: days, billingDay } = subscription;
-    requireInput(days == null || (Number.isInteger(days) && days >= 1 && days <= 365),
-      'renew-days', '请填写 1 至 365 天。');
+    requireInput(days == null || (Number.isInteger(days) && days >= 1 && days <= 366),
+      'renew-days', '请填写 1 至 366 天。');
     requireInput(days != null || billingDay == null || (Number.isInteger(billingDay) && billingDay >= 1 && billingDay <= 31),
       'billing-day', '请填写 1 至 31 日。');
     function renewedTermEnd(at, day) {
@@ -361,8 +360,6 @@
       return date.getTime() / MINUTE;
     }
     const options = [];
-    const next = Math.max(start, currentEnd);
-    const paid = schedule(input, next, next + 2 * DAY).find(segment => segment.active);
     const lastPaymentWindow = end => schedule(input, Math.max(start, end - DAY), Math.max(start, end))
       .filter(segment => segment.active).at(-1);
     const paymentWindow = lastPaymentWindow(subscription.end) ?? lastPaymentWindow(currentEnd);
@@ -372,9 +369,14 @@
         window: { start: paymentWindow.at, end: paymentWindow.end - 1 },
       } });
     }
-    requireInput(paid, 'awake-end', '找不到可续订的使用时段。');
-    options.push({ end: renewedTermEnd(paid.at), renewal: { kind: 'restart', at: paid.at },
-      interruption: { from: currentEnd, to: paid.at } });
+    if (subscription.allowLapse !== false) {
+      const next = Math.max(start, currentEnd);
+      const paid = schedule(input, next, next + 2 * DAY).find(segment => segment.active);
+      requireInput(paid, 'awake-end', '找不到可续订的使用时段。');
+      options.push({ end: renewedTermEnd(paid.at), renewal: { kind: 'restart', at: paid.at },
+        interruption: { from: currentEnd, to: paid.at } });
+    }
+    requireInput(options.length > 0, 'awake-end', '找不到可续订的使用时段。');
     return options;
   }
 
@@ -780,11 +782,11 @@
     const active = currentEnd > start;
     const rule = input.card ?? { restart: true };
     const cards = portfolioCards(input, rule);
-    if (!active && !subscription.renew) {
+    if (!active && (!subscription.renew || subscription.allowLapse === false)) {
       return { start, end: currentEnd, accessEnd: currentEnd, total: 0, baseline: 0, renewal: null,
         cards: [], unusedCards: cards.map(card => card.number).sort((a, b) => a - b), events: [], usageWindows: [] };
     }
-    validateCycles(input, start, active);
+    validateCycles(input, start, currentEnd);
     const options = subscriptionOptions(input, start, currentEnd);
     const seed = initialState(input, start, active);
     const useAll = !subscription.renew;
@@ -798,7 +800,6 @@
     }
 
     for (const option of options.reverse()) {
-      requireInput(option.end - start <= 400 * DAY, 'subscription-end', '单次最多推演 400 天（含宽限期）。');
       const model = makeModel(input, start, option.end, option.interruption);
       const search = chooseCards(model, seed, cards, rule, useAll, best);
       let step = search.next();

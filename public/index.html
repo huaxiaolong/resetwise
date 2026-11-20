@@ -7,8 +7,8 @@
   <meta name="theme-color" content="#f5f4fb">
   <title data-i18n>Resetwise · 重置卡规划器</title>
   <link rel="stylesheet" href="style.css?v=16">
-  <script src="i18n.js?v=25" defer></script>
-  <script src="app.js?v=34" defer></script>
+  <script src="i18n.js?v=26" defer></script>
+  <script src="app.js?v=35" defer></script>
 </head>
 <body id="top">
   <header class="topbar">
@@ -121,8 +121,9 @@
               </label>
             </div>
             <div id="renew-fields" class="conditional-fields" hidden>
+              <label class="check-row"><input id="renew-continuous-only" type="checkbox"><span data-i18n>只连续续订</span></label>
               <label class="field" for="renew-days"><span data-i18n>下一期订阅天数（选填）</span>
-                <input id="renew-days" type="number" min="1" max="365" step="1" placeholder="留空按月" data-i18n data-i18n-attribute="placeholder">
+                <input id="renew-days" type="number" min="1" max="366" step="1" placeholder="留空按月" data-i18n data-i18n-attribute="placeholder">
               </label>
               <label class="field" id="billing-day-field" for="billing-day" hidden><span data-i18n>原续订日（选填）</span>
                 <input id="billing-day" type="number" min="1" max="31" step="1" placeholder="留空用当前到期日" data-i18n data-i18n-attribute="placeholder" disabled>

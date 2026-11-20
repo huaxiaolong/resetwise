@@ -84,6 +84,18 @@ test('uses hosted planning by default and accepts a configured local service', a
   assert.equal(new URL(local.url).origin, origin);
 });
 
+test('passes a continuous annual renewal through the Skill and its prefill link', async () => {
+  const profile = usage('prolite', null, { availableCount: 0, credits: [] });
+  const term = { end: profile.snapshot + 365 * 1440, renewDays: 366, allowLapse: false };
+  const plan = await first({ usage: profile, settings: { subscription: term } }, origin);
+  assert.equal(plan.steps[0].renewal, 'continue');
+  const encoded = new URLSearchParams(new URL(plan.url).hash.slice(1)).get('prefill');
+  const prefill = JSON.parse(Buffer.from(encoded, 'base64url').toString());
+  assert.equal(prefill.subscription.allowLapse, false);
+  assert.equal(prefill.subscription.renewDays, 366);
+  assert.deepEqual(await more({ context: plan.context, action: 'renewal' }), { exhausted: true });
+});
+
 test('makes a zero-grace plan and finds a later window with the same quota', async () => {
   const original = await first({ usage: usage('plus', short), settings: { subscription } }, origin);
   assert.equal(original.total, 888);

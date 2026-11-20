@@ -982,6 +982,9 @@ test('switches renewal paths if either yields the same quota', () => {
   assert.ok(later.events.some(event => event.type === 'lapse'));
   assert.equal(later.total, original.total);
   assert.equal(finish(alternatePlan(input, later, 'renewal', -1)).renewal.kind, 'continue');
+
+  input.subscription.allowLapse = false;
+  assert.equal(finish(alternatePlan(input, original, 'renewal', 1)), null);
 });
 
 test('does not offer a different action that reduces total quota', () => {
@@ -1054,6 +1057,33 @@ test('a continuous renewal keeps the upcoming refresh and wins equal-usage ties'
   ]);
 });
 
+test('continuous-only renewal keeps both quota cycles even when rejoining gives more', () => {
+  const paidEnd = start + HOUR;
+  const input = withCards([], {
+    subscription: { end: paidEnd, channel: 'web', renew: true, renewDays: 1 },
+    long: { end: paidEnd + 2 * DAY, remaining: 40 },
+    short: { end: paidEnd + 2, remaining: 0, amount: 16 },
+  });
+  const unrestricted = finish(planReset(input));
+  assert.equal(unrestricted.renewal.kind, 'restart');
+
+  input.subscription.allowLapse = false;
+  const result = finish(planReset(input));
+  assert.equal(result.renewal.kind, 'continue');
+  assert.equal(result.total, 40);
+  assert.equal(result.events.find(event => event.type === 'renewal').scope, 0);
+  assert.equal(result.events.find(event => event.type === 'cycle').at, paidEnd + 2);
+  assert.ok(!result.events.some(event => event.type === 'lapse'));
+});
+
+test('continuous-only renewal needs an available time before access ends', () => {
+  const input = withCards([], {
+    snapshot: start + 15 * HOUR, mode: 'healthy',
+    subscription: { end: start + 16 * HOUR, channel: 'web', renew: true, renewDays: 1, allowLapse: false },
+  });
+  assert.throws(() => finish(planReset(input)), { field: 'awake-end' });
+});
+
 test('rejoining from free resets weekly and 5-hour limits before using later cards', () => {
   const paidEnd = start + 2;
   const input = withCards([paidEnd, start + DAY + 10], {
@@ -1098,14 +1128,17 @@ test('an already-free account can start a new subscription with no old balances'
   assert.equal(result.total, 96);
 });
 
-test('disabled renewal leaves all cards unused when the access period has ended', () => {
+test('an expired account cannot use cards without permission to start a new subscription', () => {
   const input = withCards([start + DAY, start - 10], {
     subscription: { end: start, channel: 'web', renew: false },
   });
-  const result = finish(planReset(input));
-  assert.equal(result.total, 0);
-  assert.deepEqual(result.unusedCards, [1, 2]);
-  assert.equal(result.renewal, null);
+  for (const renewal of [{ renew: false }, { renew: true, allowLapse: false }]) {
+    Object.assign(input.subscription, renewal);
+    const result = finish(planReset(input));
+    assert.equal(result.total, 0);
+    assert.deepEqual(result.unusedCards, [1, 2]);
+    assert.equal(result.renewal, null);
+  }
 });
 
 test('without renewal, using the card takes priority even with no extra quota', () => {
@@ -1201,6 +1234,19 @@ test('an uninterrupted monthly renewal extends the current paid expiry', () => {
   assert.equal(result.renewal.kind, 'continue');
   assert.ok(result.renewal.at < paidEnd);
   assert.equal(result.end, new Date('2026-02-28T17:25').getTime() / MINUTE);
+});
+
+test('a full annual term can roll into a 366-day renewal on the same quota cycle', () => {
+  const paidEnd = start + 365 * DAY;
+  const input = withCards([], {
+    subscription: { end: paidEnd, channel: 'web', renew: true, renewDays: 366, allowLapse: false },
+    long: { end: start + 7 * DAY, remaining: 25 },
+  });
+  const result = finish(planReset(input));
+  assert.equal(result.renewal.kind, 'continue');
+  assert.equal(result.end, paidEnd + 366 * DAY);
+  assert.equal(result.total, 10_425);
+  assert.equal(result.events.find(event => event.type === 'cycle' && event.at > paidEnd).at, start + 371 * DAY);
 });
 
 test('an uninterrupted monthly renewal restores the original billing day after a short month', () => {
@@ -1317,7 +1363,7 @@ test('validates each card expiry, renewal length, and monthly billing day', () =
   assert.throws(() => finish(planReset(input)), { field: 'second-card' });
   input.cards[1].until = start + 2 * DAY;
   input.subscription.renew = true;
-  for (const days of [0, 366, 1.5]) {
+  for (const days of [0, 367, 1.5]) {
     input.subscription.renewDays = days;
     assert.throws(() => finish(planReset(input)), { field: 'renew-days' });
   }
@@ -1327,7 +1373,7 @@ test('validates each card expiry, renewal length, and monthly billing day', () =
     assert.throws(() => finish(planReset(input)), { field: 'billing-day' });
   }
   input.subscription.renewDays = 30;
-  input.subscription.end = start + 390 * DAY;
+  input.subscription.end = start + 400 * DAY + 1;
   assert.throws(() => finish(planReset(input)), { field: 'subscription-end' });
 });
 

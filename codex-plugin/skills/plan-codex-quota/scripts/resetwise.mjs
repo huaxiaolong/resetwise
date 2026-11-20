@@ -97,6 +97,7 @@ export function buildInput(usage, settings = {}) {
     timeZone: usage.timeZone, snapshot: usage.snapshot, mode: settings.mode ?? 'extreme', hours: settings.hours ?? [480, 1380],
     subscription: { end: subscription.end, channel: subscription.channel === 'ios' ? 'ios' : 'web', graceDays: 0,
       renew: subscription.renew ?? true,
+      allowLapse: subscription.allowLapse ?? null,
       renewDays: subscription.renewDays ?? null, billingDay: subscription.billingDay ?? null },
     long: { start: weekly?.start ?? null, end: weekly?.end ?? null, remaining: weekly?.remaining ?? 0 },
     short: short == null ? null : { amount: short.amount ?? 16, end: short.end ?? null, remaining: short.remaining },

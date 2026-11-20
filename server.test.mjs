@@ -185,6 +185,22 @@ test('reports an exhausted search budget without returning a final plan', async 
   assert.match(frames[0].value.message, /计算超时/);
 });
 
+test('validates the continuous-only option and keeps it when searching signed alternatives', async () => {
+  const paidEnd = example.snapshot + 60;
+  const input = { ...example, cards: [], short: null, long: { end: paidEnd + 1, remaining: 100 },
+    subscription: { end: paidEnd, channel: 'web', graceDays: 0, renew: true, renewDays: 1, allowLapse: false } };
+  const plan = await solve(input);
+  assert.equal(plan.renewal.kind, 'continue');
+  const job = { action: 'renewal', direction: 1 };
+  const [update] = await receive({ operation: 'choices', plan: plan.planToken, jobs: [job] });
+  assert.deepEqual(update.value, { ...job, choice: null });
+
+  input.subscription.allowLapse = 'false';
+  const response = await post({ operation: 'plan', input });
+  assert.equal(response.status, 400);
+  assert.equal((await response.json()).field, 'renew-continuous-only');
+});
+
 test('reports a failed direction, keeps confirmed results, and allows a retry', async t => {
   const original = await solve(example);
   const alternate = planner.alternatePlan;

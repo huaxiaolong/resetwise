@@ -66,11 +66,12 @@ function inputForPlan(input) {
     && hours.every(value => whole(value, 0, DAY - 1))), 'awake-end');
 
   requireInput(object(subscription) && minute(subscription.end), 'subscription-end');
-  const { end, channel, graceDays, renew, renewDays, billingDay } = subscription;
+  const { end, channel, graceDays, renew, allowLapse, renewDays, billingDay } = subscription;
   requireInput(channel === 'ios' || channel === 'web', 'subscription-ios');
   requireInput(within(graceDays, 0, 28), 'grace-days');
   requireInput(typeof renew === 'boolean', 'subscription-renew');
-  requireInput(!renew || renewDays == null || whole(renewDays, 1, 365), 'renew-days');
+  requireInput(allowLapse == null || typeof allowLapse === 'boolean', 'renew-continuous-only');
+  requireInput(!renew || renewDays == null || whole(renewDays, 1, 366), 'renew-days');
   requireInput(!renew || renewDays != null || billingDay == null || whole(billingDay, 1, 31), 'billing-day');
 
   const active = end + (channel === 'ios' ? Math.round(graceDays * DAY) : 0) > snapshot;
@@ -89,7 +90,7 @@ function inputForPlan(input) {
 
   return {
     timeZone: zone, snapshot, mode, hours: mode === 'healthy' ? hours : [],
-    subscription: { end, channel, graceDays, renew, renewDays: renew ? renewDays ?? null : null,
+    subscription: { end, channel, graceDays, renew, allowLapse: allowLapse !== false, renewDays: renew ? renewDays ?? null : null,
       billingDay: renew && renewDays == null ? billingDay ?? null : null },
     long: { start: active ? long.start ?? null : null, end: active ? long.end : null, remaining: active ? long.remaining : 0 },
     short: short == null ? null : { amount: short.amount,
