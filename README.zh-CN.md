@@ -1,10 +1,10 @@
 <div align="center">
 
-# Resetwise
+# Resetwise · Codex 重置卡与额度规划器
 
-**规划重置卡和续订时间，尽量用足额度。**
+计算 Codex 重置卡什么时候用，并比较续订、换档或到期不续订时的预计可用额度。
 
-[**在线使用**](https://codex-resetwise.vercel.app/) · [English](README.md)
+[**打开计算器**](https://codex-resetwise.vercel.app/) · [重置卡使用指南](https://codex-resetwise.vercel.app/zh/codex-reset-cards.html) · [English](README.md)
 
 </div>
 

@@ -1,10 +1,10 @@
 <div align="center">
 
-# Resetwise
+# Resetwise · Codex Reset Card & Quota Planner
 
-**Plan reset cards and renewals to make the most of your quota.**
+Find when to use your Codex reset cards and compare how much quota you can use if you renew, change plans, or let your subscription expire.
 
-[**Open Resetwise**](https://codex-resetwise.vercel.app/) · [简体中文](README.zh-CN.md)
+[**Open the calculator**](https://codex-resetwise.vercel.app/) · [Reset card guide](https://codex-resetwise.vercel.app/codex-reset-cards.html) · [简体中文](README.zh-CN.md)
 
 </div>
 
