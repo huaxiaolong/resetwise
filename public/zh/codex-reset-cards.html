@@ -1,0 +1,62 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="description" content="Codex 重置卡什么时候用？用具体例子比较立即兑换和等周额度刷新后再用，并按 5 小时额度、卡片到期和订阅时间规划。">
+  <meta name="theme-color" content="#f5f4fb">
+  <title>Codex 重置卡什么时候用？ | Resetwise</title>
+  <link rel="canonical" href="https://codex-resetwise.vercel.app/zh/codex-reset-cards.html">
+  <link rel="alternate" hreflang="en" href="https://codex-resetwise.vercel.app/codex-reset-cards.html">
+  <link rel="alternate" hreflang="zh-Hans" href="https://codex-resetwise.vercel.app/zh/codex-reset-cards.html">
+  <link rel="alternate" hreflang="x-default" href="https://codex-resetwise.vercel.app/codex-reset-cards.html">
+  <link rel="stylesheet" href="/style.css?v=19">
+</head>
+<body>
+  <header class="topbar">
+    <div class="shell topbar-inner">
+      <a class="brand" href="/">
+        <span class="brand-mark" aria-hidden="true"><i></i></span>
+        Resetwise
+      </a>
+      <nav class="top-actions" aria-label="指南语言">
+        <a class="button button-outline" href="/codex-reset-cards.html" lang="en" hreflang="en">English</a>
+      </nav>
+    </div>
+  </header>
+
+  <main class="shell guide">
+    <h1 class="page-title">Codex 重置卡什么时候用？</h1>
+    <p class="guide-lead">重置卡能把覆盖的 Codex 额度恢复到满额。如果卡片在下次周额度自然刷新之后才过期，可以先用自然刷新的额度，再按需兑换。</p>
+
+    <article class="panel guide-content">
+      <h2>先确认卡片的重置范围和到期时间</h2>
+      <p>在桌面端打开「设置 → 用量与账单」，查看当前额度还剩多少、何时刷新。再点开可用的重置卡，核对它能重置哪些额度以及最晚何时兑换。</p>
+      <p>手动兑换完整重置卡时，至少一项覆盖窗口的剩余额度需要低于 80%。已满额的窗口会保留原刷新时间。如果兑换重新开始了周周期，新的刷新日期会替代原来的日期。用卡后可以在用量页确认。 <a href="https://help.openai.com/en/articles/20001498-how-resets-work-in-codex">OpenAI 的 Codex 重置说明</a>。</p>
+
+      <h2>周日立即用卡，还是等到周一？</h2>
+      <p>假设周日还剩 20% 周额度，原定周一 09:00 刷新，卡片在周一 22:00 到期。订阅在这两天内有效，账号只有周额度限制，且能在周一结束前用掉表中的额度。这个例子里，用卡会重新开始周周期。</p>
+      <table>
+        <thead>
+          <tr><th scope="col">安排</th><th scope="col">用卡当场恢复</th><th scope="col">到周一晚累计可用</th></tr>
+        </thead>
+        <tbody>
+          <tr><th scope="row">不用卡，等周额度自然刷新</th><td>—</td><td>120%</td></tr>
+          <tr><th scope="row">周日立即用卡</th><td>80%</td><td>100%</td></tr>
+          <tr><th scope="row">周一刷新后先用掉 40%，再用卡</th><td>40%</td><td>160%</td></tr>
+        </tbody>
+      </table>
+      <p>等到周一用卡，可以先用原来剩下的 20%，再用新一轮的 40%，然后用卡把余额恢复到 100%。相比不用卡的 120%，<strong>全程净增 40 个百分点</strong>。周日用卡当场恢复 80 个百分点，并把下次刷新推迟到周一之后。</p>
+
+      <h2>用 Resetwise 算自己的用卡时间</h2>
+      <ol>
+        <li>填入剩余周额度和下一次自然刷新时间。</li>
+        <li>账号有 5 小时限制时，填入该窗口的剩余百分比。用量页显示下次刷新时间时一并填入。</li>
+        <li>填入每张重置卡的到期时间和订阅可用期。按实际情况选择续订、不续订或更换套餐。</li>
+        <li>计算后，比较用卡与不用卡的预计额度。「当场恢复周额度」是兑换时补回的额度。「全程净增」计入用卡对后续刷新时间的影响。</li>
+      </ol>
+      <p class="guide-actions"><a class="button button-primary" href="/#settings">打开 Codex 额度规划器</a></p>
+    </article>
+  </main>
+</body>
+</html>

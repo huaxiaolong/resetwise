@@ -1127,6 +1127,7 @@
     offsetClockFormat = new Intl.DateTimeFormat(locale, { ...clockOptions, timeZoneName: 'shortOffset' });
     percentFormat = new Intl.NumberFormat(locale, { style: 'percent', maximumFractionDigits: 2 });
     copy.apply();
+    get('reset-guide-link').href = language === 'en' ? '/codex-reset-cards.html' : '/zh/codex-reset-cards.html';
     languageButton.textContent = language === 'en' ? '中文' : 'EN';
     languageButton.lang = language === 'en' ? 'zh-CN' : 'en';
     languageButton.setAttribute('aria-label', language === 'en' ? '切换至中文' : 'Switch to English');

@@ -65,6 +65,41 @@ test('serves the page and its assets, with the planner and server files outside 
   assert.equal((await fetch(url + '/api/plan')).status, 405);
 });
 
+test('serves the canonical calculator, crawl directives, and reciprocal guide translations', async () => {
+  const site = 'https://codex-resetwise.vercel.app';
+  const guides = { en: '/codex-reset-cards.html', 'zh-Hans': '/zh/codex-reset-cards.html' };
+  const robots = await fetch(url + '/robots.txt');
+  assert.equal(robots.status, 200);
+  assert.match(robots.headers.get('content-type'), /^text\/plain\b/);
+  assert.ok((await robots.text()).includes(`Sitemap: ${site}/sitemap.xml`));
+
+  const sitemap = await fetch(url + '/sitemap.xml');
+  assert.equal(sitemap.status, 200);
+  assert.match(sitemap.headers.get('content-type'), /^application\/xml\b/);
+  const entries = [...(await sitemap.text()).matchAll(/<loc>([^<]+)<\/loc>/g)].map(([, loc]) => loc);
+  assert.deepEqual(entries, ['/', ...Object.values(guides)].map(path => site + path));
+
+  for (const path of ['/', '/index.html']) {
+    const page = await fetch(url + path);
+    assert.equal(page.status, 200);
+    const html = await page.text();
+    assert.ok(html.includes(`<link rel="canonical" href="${site}/">`));
+    assert.ok(html.includes(`href="${guides['zh-Hans']}"`));
+    assert.match(html, /<h1\b[^>]*>Codex /);
+  }
+  for (const path of Object.values(guides)) {
+    const page = await fetch(url + path);
+    assert.equal(page.status, 200);
+    assert.match(page.headers.get('content-type'), /^text\/html\b/);
+    const html = await page.text();
+    assert.ok(html.includes(`<link rel="canonical" href="${site + path}">`));
+    for (const [language, translated] of Object.entries({ ...guides, 'x-default': guides.en })) {
+      assert.ok(html.includes(`<link rel="alternate" hreflang="${language}" href="${site + translated}">`));
+    }
+    assert.ok(html.includes('href="/#settings"'));
+  }
+});
+
 test('plans the three-card example and keeps its 916% total when the third card moves past renewal', async () => {
   const original = await solve(example);
   const rejoin = minute('2026-12-03T17:00');

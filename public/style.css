@@ -104,6 +104,20 @@ button { cursor: pointer; }
 .button-primary > [aria-hidden] { font-family: var(--data-font); font-size: 1.27rem; }
 
 .page-title { padding-block: 30px 22px; font-size: clamp(1.8rem, 4vw, 2.6rem); line-height: 1.2; letter-spacing: -.045em; font-weight: 770; }
+.page-intro, .guide-lead { margin-block-end: 18px; color: var(--muted); line-height: 1.6; }
+.page-intro a { display: inline-block; }
+.guide { max-width: 800px; padding-block-end: 32px; }
+.guide .page-title { letter-spacing: -.028em; }
+.guide-content { padding: clamp(18px, 4vw, 32px); line-height: 1.65; }
+.guide-content h2:not(:first-child) { margin-block-start: 1.35em; }
+.guide-content :is(p, ul, ol) { margin-block: .55em 0; }
+.guide-content li + li { margin-block-start: .35em; }
+.guide-content table { width: 100%; margin-block-start: 12px; border-collapse: collapse; font-size: .9rem; }
+.guide-content :is(th, td) { padding: 8px; border-bottom: 1px solid var(--line); text-align: left; overflow-wrap: anywhere; }
+.guide-content thead { background: var(--accent-soft); }
+.guide-content td { font-variant-numeric: tabular-nums; }
+.guide-content .guide-actions { margin-block-start: 16px; }
+.guide-actions .button, .top-actions a.button { display: inline-flex; align-items: center; text-decoration: none; }
 
 .workspace { display: grid; grid-template-columns: minmax(322px, .92fr) minmax(0, 1.45fr); gap: 24px; align-items: start; margin-bottom: 40px; }
 .plan-shortcut { display: none; }

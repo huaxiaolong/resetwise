@@ -8,6 +8,10 @@ import plan from './api/plan.mjs';
 const assets = new Map([
   ['/', ['index.html', 'text/html; charset=utf-8']],
   ['/index.html', ['index.html', 'text/html; charset=utf-8']],
+  ['/codex-reset-cards.html', ['codex-reset-cards.html', 'text/html; charset=utf-8']],
+  ['/zh/codex-reset-cards.html', ['zh/codex-reset-cards.html', 'text/html; charset=utf-8']],
+  ['/robots.txt', ['robots.txt', 'text/plain; charset=utf-8']],
+  ['/sitemap.xml', ['sitemap.xml', 'application/xml; charset=utf-8']],
   ['/style.css', ['style.css', 'text/css; charset=utf-8']],
   ['/i18n.js', ['i18n.js', 'text/javascript; charset=utf-8']],
   ['/app.js', ['app.js', 'text/javascript; charset=utf-8']],

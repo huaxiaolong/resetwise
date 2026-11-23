@@ -3,12 +3,18 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <meta name="description" content="结合额度周期、订阅到期、公告重置和作息，规划多张重置卡和续订。" data-i18n data-i18n-attribute="content">
+  <meta name="description" content="计算 Codex 重置卡什么时候用。输入剩余周额度、5 小时窗口、卡片到期和订阅变更，比较用卡与不用卡的预计可用额度。" data-i18n data-i18n-attribute="content">
   <meta name="theme-color" content="#f5f4fb">
-  <title data-i18n>Resetwise · 重置卡规划器</title>
-  <link rel="stylesheet" href="style.css?v=18">
-  <script src="i18n.js?v=27" defer></script>
-  <script src="app.js?v=37" defer></script>
+  <title data-i18n>Codex 重置卡与额度规划器 | Resetwise</title>
+  <link rel="canonical" href="https://codex-resetwise.vercel.app/">
+  <meta property="og:type" content="website">
+  <meta property="og:site_name" content="Resetwise">
+  <meta property="og:title" content="Codex 重置卡与额度规划器 | Resetwise" data-i18n data-i18n-attribute="content">
+  <meta property="og:description" content="计算 Codex 重置卡什么时候用。输入剩余周额度、5 小时窗口、卡片到期和订阅变更，比较用卡与不用卡的预计可用额度。" data-i18n data-i18n-attribute="content">
+  <meta property="og:url" content="https://codex-resetwise.vercel.app/">
+  <link rel="stylesheet" href="/style.css?v=19">
+  <script src="/i18n.js?v=28" defer></script>
+  <script src="/app.js?v=38" defer></script>
 </head>
 <body id="top">
   <header class="topbar">
@@ -25,7 +31,11 @@
   </header>
 
   <main class="shell">
-    <h1 class="page-title" data-i18n>重置卡规划</h1>
+    <h1 class="page-title" data-i18n>Codex 重置卡与额度规划器</h1>
+    <p class="page-intro">
+      <span data-i18n>结合自然刷新、卡片到期和订阅变更，比较用卡前后预计能用多少 Codex 额度。</span>
+      <a id="reset-guide-link" href="/zh/codex-reset-cards.html" data-i18n>Codex 重置卡使用指南</a>
+    </p>
 
     <div class="workspace">
       <form class="settings panel" id="settings" novalidate aria-labelledby="settings-title">

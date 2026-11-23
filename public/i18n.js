@@ -2,11 +2,13 @@
   'use strict';
 
   const english = {
-    '结合额度周期、订阅到期、公告重置和作息，规划多张重置卡和续订。': 'Plan reset cards and renewal around quota cycles, subscription expiry, announced resets, and your schedule.',
-    'Resetwise · 重置卡规划器': 'Resetwise · Reset Card Planner',
+    '计算 Codex 重置卡什么时候用。输入剩余周额度、5 小时窗口、卡片到期和订阅变更，比较用卡与不用卡的预计可用额度。': 'Find when to use Codex reset cards. Compare projected usage with and without resets based on weekly and 5-hour limits, card expiry, and plan changes.',
+    'Codex 重置卡与额度规划器 | Resetwise': 'Codex Reset Card & Quota Planner | Resetwise',
     '快捷操作': 'Quick actions',
     '在 X 上联系我': 'Contact me on X',
-    '重置卡规划': 'Reset card planner',
+    'Codex 重置卡与额度规划器': 'Codex Reset Card & Quota Planner',
+    '结合自然刷新、卡片到期和订阅变更，比较用卡前后预计能用多少 Codex 额度。': 'Compare projected Codex usage with and without resets around scheduled refreshes, card expiry, and subscription changes.',
+    'Codex 重置卡使用指南': 'Guide to Codex reset cards',
     '计算条件': 'Inputs',
     '使用模式': 'Usage mode',
     '极限使用': 'Extreme mode',
