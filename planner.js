@@ -9,6 +9,7 @@
   const SHORT = 2;
   const ALL_LIMITS = LONG | SHORT;
   const EPSILON = 1e-7;
+  const weeklyTiers = Object.freeze(['plus', 'pro100', 'pro200', 'pro500']);
 
   function requireInput(condition, field, message) {
     if (!condition) throw Object.assign(new RangeError(message), { field });
@@ -38,6 +39,8 @@
       if (interruption.from >= start) point(interruption.from).lapse = true;
       point(interruption.to).resume = true;
     }
+    const switchAt = input.tierChange?.at ?? Infinity;
+    if (start <= switchAt && switchAt < end) point(switchAt).switchTier = true;
     if (input.mode === 'extreme') {
       allow(start, end);
     } else {
@@ -72,8 +75,9 @@
       }
     }
 
-    const enabled = input.short ? ALL_LIMITS : LONG;
     for (const reset of input.resets) {
+      const shortEnabled = reset.at < switchAt ? input.short : input.tierChange?.to === 'plus';
+      const enabled = shortEnabled ? ALL_LIMITS : LONG;
       const scope = (reset.scope ?? ALL_LIMITS) & enabled;
       if (scope && start <= reset.at && reset.at < end) {
         point(reset.at).resets.push(scope);
@@ -81,7 +85,8 @@
     }
 
     const ordered = [...points.values()]
-      .filter(point => point.at === start || point.at === end || point.change || point.resets.length || point.lapse || point.resume)
+      .filter(point => point.at === start || point.at === end || point.change || point.resets.length
+        || point.lapse || point.resume || point.switchTier)
       .sort((left, right) => left.at - right.at);
     let active = 0;
     return ordered.slice(0, -1).map((entry, index) => {
@@ -92,15 +97,16 @@
   }
 
   function resetLimits(state, model, scope, restart, moving) {
+    const { weeklyCap, shortCap } = model.segments[state.segment].quota;
     if (scope & LONG) {
-      state.long = 100;
+      state.long = weeklyCap;
       if (restart) {
         state.longDue = state.at + WEEK;
         if (moving) moving.longDue = moving.at;
       }
     }
     if (scope & SHORT) {
-      state.short = model.shortCap;
+      state.short = shortCap;
       if (restart) {
         state.shortDue = Infinity;
         if (moving) moving.shortDue = false;
@@ -111,18 +117,33 @@
   function processBoundary(state, model, events, moving) {
     const time = state.at;
     const segment = model.segments[state.segment];
+    const { weeklyCap, shortCap, enabled } = segment.quota;
     const begins = segment.at === time;
     if (begins && segment.lapse) {
       state.long = 0;
-      state.short = model.shortEnabled ? 0 : Infinity;
+      state.short = enabled & SHORT ? 0 : Infinity;
       state.longDue = state.shortDue = Infinity;
       if (moving) moving.longDue = moving.shortDue = false;
       events?.push({ at: time, type: 'lapse' });
     }
     if (segment.suspended) return;
+    if (begins && segment.switchTier) {
+      // Keep usage charged to the same weekly window when its cap changes.
+      state.long = Math.max(0, state.long + (weeklyCap - 100));
+      const oldShortCap = model.openingQuota.shortCap;
+      if (!Number.isFinite(shortCap) || !Number.isFinite(oldShortCap)) {
+        state.short = shortCap;
+        state.shortDue = Infinity;
+        if (moving) moving.shortDue = false;
+      } else {
+        state.short = Math.max(0, state.short + (shortCap - oldShortCap));
+      }
+      const { from, to } = model.tierChange;
+      events?.push({ at: time, type: 'tier-change', scope: 0, from, to });
+    }
     if (begins && segment.resume) {
-      resetLimits(state, model, model.enabled, true, moving);
-      events?.push({ at: time, type: 'renewal', kind: 'restart', scope: model.enabled });
+      resetLimits(state, model, enabled, true, moving);
+      events?.push({ at: time, type: 'renewal', kind: 'restart', scope: enabled });
     }
     const refreshed = (state.longDue === time ? LONG : 0) | (state.shortDue === time ? SHORT : 0);
     if (refreshed) {
@@ -141,7 +162,7 @@
     while (state.at < target) {
       const segment = model.segments[state.segment];
       const canSpend = segment.active && model.rate > 0 && state.long > 0 && state.short > 0;
-      if (canSpend && model.shortEnabled && state.shortDue === Infinity) {
+      if (canSpend && (segment.quota.enabled & SHORT) && state.shortDue === Infinity) {
         state.shortDue = state.at + FIVE_HOURS;
         if (moving) moving.shortDue = moving.at;
       }
@@ -173,16 +194,23 @@
   }
 
   function cardScope(state, card, model) {
+    const { weeklyCap, shortCap, enabled } = model.segments[state.segment].quota;
     const covered = card.scope ?? ALL_LIMITS;
     const threshold = card.threshold ?? 80;
     const longCovered = covered & LONG;
-    const shortCovered = model.shortEnabled && (covered & SHORT);
-    const eligible = (longCovered && state.long < threshold - EPSILON)
-      || (shortCovered && state.short < model.shortCap * threshold / 100 - EPSILON);
+    const shortCovered = enabled & covered & SHORT;
+    const eligible = (longCovered && state.long < weeklyCap * (threshold / 100) - EPSILON)
+      || (shortCovered && state.short < shortCap * threshold / 100 - EPSILON);
     if (!eligible) return 0;
 
-    return (longCovered && 100 - state.long > EPSILON ? LONG : 0)
-      | (shortCovered && model.shortCap - state.short > EPSILON ? SHORT : 0);
+    return (longCovered && weeklyCap - state.long > EPSILON ? LONG : 0)
+      | (shortCovered && shortCap - state.short > EPSILON ? SHORT : 0);
+  }
+
+  function restoredQuota(state, model, scope) {
+    const { weeklyCap, shortCap } = model.segments[state.segment].quota;
+    return { scope, long: scope & LONG ? weeklyCap - state.long : 0,
+      short: scope & SHORT ? shortCap - state.short : 0 };
   }
 
   function recommendWindow(scores, first, baseline, bestTotal, tolerance) {
@@ -229,13 +257,22 @@
   }
 
   function makeModel(input, start, end, interruption) {
+    function quota(weeklyCap, shortAmount) {
+      return { weeklyCap, shortCap: shortAmount == null ? Infinity : shortAmount * (weeklyCap / 100),
+        enabled: shortAmount == null ? LONG : ALL_LIMITS };
+    }
+    const { tierChange } = input;
+    const switchAt = tierChange?.at ?? Infinity;
+    const openingQuota = quota(100, input.short?.amount);
+    const nextQuota = tierChange && quota(tierChange.weeklyPercent,
+      tierChange.to === 'plus' ? tierChange.shortAmount ?? 16 : null);
     return {
       end,
-      segments: schedule(input, start, end, interruption),
+      segments: schedule(input, start, end, interruption).map(segment => ({
+        ...segment, quota: segment.at >= switchAt ? nextQuota : openingQuota,
+      })),
       rate: (input.rate ?? Infinity) / 60,
-      shortEnabled: Boolean(input.short),
-      shortCap: input.short?.amount ?? Infinity,
-      enabled: input.short ? ALL_LIMITS : LONG,
+      tierChange, switchAt, openingQuota, nextQuota,
     };
   }
 
@@ -325,11 +362,7 @@
       advance(chosen, bestAt, model, events, usageWindows);
       usedBeforeCard = chosen.used;
       const scope = scopes[bestAt - first];
-      restored = {
-        scope,
-        long: scope & LONG ? 100 - chosen.long : 0,
-        short: scope & SHORT ? model.shortCap - chosen.short : 0,
-      };
+      restored = restoredQuota(chosen, model, scope);
       resetLimits(chosen, model, scope, card.restart);
       events.push({ at: bestAt, type: 'card', scope });
     }
@@ -343,7 +376,20 @@
   }
 
   function subscriptionOptions(input, start, currentEnd) {
-    const { subscription } = input;
+    const { subscription, tierChange } = input;
+    if (tierChange) {
+      requireInput(weeklyTiers.includes(tierChange.from), 'tier-from', '请选择当前套餐。');
+      requireInput(weeklyTiers.includes(tierChange.to) && tierChange.to !== tierChange.from,
+        'tier-to', '请选择不同的目标套餐。');
+      requireInput(subscription.renew && Number.isSafeInteger(tierChange.at) && start < currentEnd
+        && start <= tierChange.at && tierChange.at <= currentEnd,
+      'tier-at', '换档生效时间须在推演起点和当前订阅可用期结束之间。');
+      requireInput(Number.isFinite(tierChange.weeklyPercent) && tierChange.weeklyPercent >= 0.01
+        && tierChange.weeklyPercent <= 10_000, 'tier-weekly-percent', '请填写 0.01% 至 10000%。');
+      requireInput(tierChange.shortAmount == null || (tierChange.to === 'plus'
+        && Number.isFinite(tierChange.shortAmount) && tierChange.shortAmount >= 0.01 && tierChange.shortAmount <= 100),
+      'tier-short-amount', '请填写 0.01% 至 100%。');
+    }
     if (!subscription.renew) return [{ end: currentEnd, renewal: null }];
     const { renewDays: days, billingDay } = subscription;
     requireInput(days == null || (Number.isInteger(days) && days >= 1 && days <= 366),
@@ -358,6 +404,10 @@
       monthEnd.setUTCFullYear(date.getFullYear(), nextMonth + 1, 0);
       date.setMonth(nextMonth, Math.min(day ?? date.getDate(), monthEnd.getUTCDate()));
       return date.getTime() / MINUTE;
+    }
+    if (tierChange) {
+      const { at, from, to } = tierChange;
+      return [{ end: renewedTermEnd(at, billingDay), renewal: { kind: 'switch', at, from, to } }];
     }
     const options = [];
     const lastPaymentWindow = end => schedule(input, Math.max(start, end - DAY), Math.max(start, end))
@@ -428,7 +478,11 @@
       || (!segment.suspended && segment.resets.some(scope => scope & LONG)));
     const activeSegments = model.segments.filter(segment => segment.active);
     const shortOnlyResets = model.segments.filter(segment => !segment.suspended && segment.resets.includes(SHORT)).length;
-    const tightShortBound = model.shortEnabled && model.rate === Infinity && model.shortCap > EPSILON
+    const { switchAt, openingQuota, nextQuota } = model;
+    const targetCap = nextQuota?.weeklyCap ?? 100;
+    const cardsAfterSwitch = nextQuota ? cards.filter(card => card.until > switchAt).length : 0;
+    const tightShortBound = !nextQuota && model.rate === Infinity && Number.isFinite(openingQuota.shortCap)
+      && openingQuota.shortCap > EPSILON
       && ((rule.scope ?? ALL_LIMITS) & LONG) && !shortOnlyResets;
     let checked = 0;
     let reported = false;
@@ -446,7 +500,7 @@
 
     const cutoffs = [...hardResets, { at: model.end }].map(segment => {
       const latest = [];
-      const slots = tightShortBound ? Math.ceil(100 / model.shortCap) : 1;
+      const slots = tightShortBound ? Math.ceil(100 / openingQuota.shortCap) : 1;
       for (let at = previousActive(segment.at - 1); at >= seed.at && latest.length < slots;
         at = previousActive(at - FIVE_HOURS)) latest.push(at);
       return { ...segment, latest };
@@ -458,7 +512,23 @@
       let slots = 0;
       while (slots < cutoff.latest.length && cutoff.latest[slots] >= from) slots++;
       // A pending 5-hour timer can grant one extra balance after a weekly refresh.
-      return Math.min(100, (slots + 1) * model.shortCap);
+      return Math.min(100, (slots + 1) * openingQuota.shortCap);
+    }
+
+    const naturalGrants = (due, until) => Math.max(0, Math.ceil((until - due) / WEEK));
+    function switchedSupply(balance, due, from, cutoff) {
+      const until = (cutoff.latest[0] ?? -Infinity) + 1;
+      if (until <= from) return 0;
+      const grants = naturalGrants(due, until);
+      if (from >= switchAt) return balance + grants * targetCap;
+      if (until <= switchAt) return balance + grants * 100;
+
+      // Use the more valuable cap wherever the movable refresh clock could reach it.
+      const uplift = Math.max(0, targetCap - 100);
+      const after = uplift
+        ? Math.min(grants, naturalGrants(Math.max(due, switchAt), until))
+        : grants - Math.min(grants, naturalGrants(due, switchAt));
+      return balance + uplift + (grants - after) * 100 + after * targetCap;
     }
 
     function weeklySupply(state) {
@@ -468,33 +538,44 @@
       let supply = state.used;
       for (const cutoff of cutoffs) {
         if (cutoff.at <= state.at) continue;
-        const grants = Math.max(0, Math.ceil((cutoff.at - due) / WEEK));
-        supply += grants ? balance + 100 * (grants - 1) + usableFrom(due + (grants - 1) * WEEK, cutoff)
-          : Math.min(balance, usableFrom(from, cutoff));
+        if (nextQuota) {
+          supply += switchedSupply(balance, due, from, cutoff);
+        } else {
+          const grants = naturalGrants(due, cutoff.at);
+          supply += grants ? balance + 100 * (grants - 1) + usableFrom(due + (grants - 1) * WEEK, cutoff)
+            : Math.min(balance, usableFrom(from, cutoff));
+        }
         const refilled = cutoff.resume || !cutoff.lapse;
-        balance = refilled ? 100 : 0;
+        balance = refilled ? (cutoff.at >= switchAt ? targetCap : 100) : 0;
         due = refilled ? cutoff.at + WEEK : Infinity;
         from = cutoff.at;
       }
       return supply;
     }
 
+    function cardSupply(at, remaining, count) {
+      if (at >= switchAt) return targetCap * count;
+      const largerGrants = Math.min(remaining, count, cardsAfterSwitch);
+      return 100 * count + Math.max(0, targetCap - 100) * largerGrants;
+    }
+
     function canImprove(state, count, remaining) {
       if (targetTotal !== undefined) {
-        return count + remaining === cards.length && weeklySupply(state) + 100 * remaining + EPSILON >= targetTotal;
+        return count + remaining === cards.length
+          && weeklySupply(state) + cardSupply(state.at, remaining, remaining) + EPSILON >= targetTotal;
       }
       if (useAll && count + remaining !== best.moves.length) return count + remaining > best.moves.length;
       const supply = weeklySupply(state);
       if (incumbent) {
-        const highest = supply + 100 * remaining;
+        const highest = supply + cardSupply(state.at, remaining, remaining);
         const matching = Math.min(remaining, incumbent.moves.length - count);
         if (highest + EPSILON < incumbent.total || (highest <= incumbent.total + EPSILON
-          && (matching < 0 || supply + 100 * matching + EPSILON < incumbent.total))) return false;
+          && (matching < 0 || supply + cardSupply(state.at, remaining, matching) + EPSILON < incumbent.total))) return false;
       }
-      if (supply + 100 * remaining > best.total + EPSILON) return true;
+      if (supply + cardSupply(state.at, remaining, remaining) > best.total + EPSILON) return true;
       if (useAll || count >= best.moves.length) return false;
       const fewer = Math.min(remaining, best.moves.length - count - 1);
-      return supply + 100 * fewer + EPSILON >= best.total;
+      return supply + cardSupply(state.at, remaining, fewer) + EPSILON >= best.total;
     }
 
     function consider(total, choices) {
@@ -585,7 +666,7 @@
             moves.pop();
             if (match) return;
           }
-          if (!rule.restart && (!model.shortEnabled || Number.isFinite(after.shortDue))) step = stable - time;
+          if (!rule.restart && (!(segment.quota.enabled & SHORT) || Number.isFinite(after.shortDue))) step = stable - time;
           if (leaf) step = Math.max(step, leaf.skip);
         }
         time = next(time + step);
@@ -600,6 +681,7 @@
     if (cards.length > 1) {
       if (useAll) yield* tryEarlyMoves(first, true);
       yield* tryEarlyMoves(Math.max(first, seed.longDue), true);
+      if (switchAt >= first && switchAt < until) yield* tryEarlyMoves(switchAt, true);
       for (const segment of hardResets) {
         if (segment.at >= first && segment.at < until) yield* tryEarlyMoves(segment.at, true);
       }
@@ -608,7 +690,7 @@
     return { ...best, baseline };
   }
 
-  function replay(model, seed, moves, rule, events, usageWindows) {
+  function replay(model, seed, moves, rule, events, usageWindows, restorations) {
     const state = { ...seed };
     processBoundary(state, model, events);
     for (const move of moves) {
@@ -617,6 +699,7 @@
       if (!model.segments[state.segment].active) return -Infinity;
       const scope = cardScope(state, rule, model);
       if (!scope) return -Infinity;
+      restorations?.push(restoredQuota(state, model, scope));
       resetLimits(state, model, scope, rule.restart);
       events?.push({ at: move.at, type: 'card', scope, number: move.number });
     }
@@ -665,10 +748,12 @@
     }
     const events = [];
     const usageWindows = [];
-    const total = replay(model, seed, moves, rule, events, usageWindows);
+    const restorations = [];
+    const total = replay(model, seed, moves, rule, events, usageWindows, restorations);
     let previous = baseline;
     for (let index = 0; index < moves.length; index++) {
       const subtotal = index === moves.length - 1 ? total : replay(model, seed, moves.slice(0, index + 1), rule);
+      moves[index].restored = restorations[index];
       moves[index].gain = subtotal - previous;
       previous = subtotal;
     }
@@ -706,7 +791,7 @@
   function* alternatePlan(input, result, action, direction, { prepare = false } = {}) {
     const isRenewal = action === 'renewal';
     const focused = isRenewal ? result.renewal : result.cards.find(card => card.number === action);
-    if (!focused || (direction !== -1 && direction !== 1)) return null;
+    if (!focused || (isRenewal && focused.kind === 'switch') || (direction !== -1 && direction !== 1)) return null;
     const { start, accessEnd: currentEnd, total } = result;
     const rule = input.card ?? { restart: true };
     const times = new Map(result.cards.map(({ number, at }) => [number, at]));
@@ -782,7 +867,7 @@
     const active = currentEnd > start;
     const rule = input.card ?? { restart: true };
     const cards = portfolioCards(input, rule);
-    if (!active && (!subscription.renew || subscription.allowLapse === false)) {
+    if (!input.tierChange && !active && (!subscription.renew || subscription.allowLapse === false)) {
       return { start, end: currentEnd, accessEnd: currentEnd, total: 0, baseline: 0, renewal: null,
         cards: [], unusedCards: cards.map(card => card.number).sort((a, b) => a - b), events: [], usageWindows: [] };
     }
@@ -820,11 +905,11 @@
   }
 
   function* planReset(input, makeScorer) {
-    if (!input.cards && !input.subscription.renew) return yield* searchSingle(input, makeScorer);
+    if (!input.tierChange && !input.cards && !input.subscription.renew) return yield* searchSingle(input, makeScorer);
     return yield* searchPortfolio(input);
   }
 
   const api = { planReset, alternatePlan, describeAlternative };
-  if (typeof module === 'object') module.exports = api;
+  if (typeof module === 'object') module.exports = { ...api, weeklyTiers };
   else globalThis.Resetwise = api;
 })();

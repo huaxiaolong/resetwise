@@ -4,7 +4,7 @@ import { createInterface } from 'node:readline';
 import { pathToFileURL } from 'node:url';
 
 const bundledCLI = '/Applications/ChatGPT.app/Contents/Resources/codex-cli/bin/codex';
-const proPlans = new Set(['prolite', 'pro', 'promax']);
+const tiers = new Map([['plus', 'plus'], ['prolite', 'pro100'], ['pro', 'pro200'], ['promax', 'pro500']]);
 const minute = seconds => Number.isFinite(seconds) ? Math.ceil(seconds / 60) : null;
 
 function windowFields(window) {
@@ -22,7 +22,7 @@ export function normalizeUsage(payload, now = Date.now(), timeZone = Intl.DateTi
   const weekly = windowFields(windows.find(window => window?.windowDurationMins === 10_080));
   const shortWindow = windowFields(windows.find(window => window?.windowDurationMins === 300));
   const fiveHour = shortWindow ? { status: 'limited', ...shortWindow }
-    : { status: proPlans.has(planType) ? 'weekly-only' : 'unknown' };
+    : { status: tiers.get(planType)?.startsWith('pro') ? 'weekly-only' : 'unknown' };
   const snapshot = Math.floor(now / 60_000);
 
   const summary = rateLimitResetCredits;
@@ -75,6 +75,18 @@ export function buildInput(usage, settings = {}) {
   const subscription = settings.subscription ?? {};
   if (!Number.isSafeInteger(subscription.end)) missing.push('subscription.end');
   const active = subscription.end > usage.snapshot;
+  let tierChange;
+  if (settings.tierChange) {
+    const { from = tiers.get(usage.planType), to, at, weeklyPercent, shortAmount } = settings.tierChange;
+    if (!from) missing.push('tierChange.from');
+    if (!to) missing.push('tierChange.to');
+    if (!Number.isSafeInteger(at)) missing.push('tierChange.at');
+    if (!Number.isFinite(weeklyPercent) || weeklyPercent < 0.01 || weeklyPercent > 10_000) {
+      missing.push('tierChange.weeklyPercent');
+    }
+    tierChange = { from, to, at, weeklyPercent };
+    if (to === 'plus' && shortAmount != null) tierChange.shortAmount = shortAmount;
+  }
 
   const weekly = settings.weekly ?? usage.weekly;
   if (active && (!Number.isFinite(weekly?.remaining) || !Number.isSafeInteger(weekly.end))) missing.push('weekly');
@@ -96,7 +108,7 @@ export function buildInput(usage, settings = {}) {
   return { input: {
     timeZone: usage.timeZone, snapshot: usage.snapshot, mode: settings.mode ?? 'extreme', hours: settings.hours ?? [480, 1380],
     subscription: { end: subscription.end, channel: subscription.channel === 'ios' ? 'ios' : 'web', graceDays: 0,
-      renew: subscription.renew ?? true,
+      renew: tierChange ? true : subscription.renew ?? true,
       allowLapse: subscription.allowLapse ?? null,
       renewDays: subscription.renewDays ?? null, billingDay: subscription.billingDay ?? null },
     long: { start: weekly?.start ?? null, end: weekly?.end ?? null, remaining: weekly?.remaining ?? 0 },
@@ -104,6 +116,7 @@ export function buildInput(usage, settings = {}) {
     card: { restart: settings.card?.restart ?? true },
     cards: cards.map((until, index) => ({ until, field: `card-until-${index + 1}` })),
     resets: (settings.resets ?? []).map(at => ({ at })),
+    ...(tierChange ? { tierChange } : {}),
   } };
 }
 
@@ -146,19 +159,25 @@ function present(result, input, origin, seen) {
     cumulative += card.gain;
     const rounded = hundredths(index === result.cards.length - 1 ? result.total - result.baseline : cumulative);
     const step = { kind: 'card', number: card.number, at: card.at, window: range(card.window),
-      exampleTime: label(card.at), gain: (rounded - previous) / 100 };
+      exampleTime: label(card.at), gain: (rounded - previous) / 100,
+      ...(card.restored && { restored: card.restored }) };
     previous = rounded;
     return step;
   });
-  if (result.renewal) {
+  if (input.tierChange) {
+    if (result.renewal?.kind !== 'switch') throw new Error('The Resetwise service did not apply the tier change. Use an updated service.');
+    const { at, from, to } = result.renewal;
+    steps.unshift({ kind: 'tier-change', at, window: label(at), from, to });
+  } else if (result.renewal) {
     const { kind, at, window, grace } = result.renewal;
     steps.push({ kind: 'renewal', renewal: kind, at, window: window ? range(window) : label(at), grace });
   }
   steps.sort((left, right) => left.at - right.at);
-  const actions = steps.map(step => step.number ?? 'renewal');
+  const actions = steps.filter(step => step.kind !== 'tier-change').map(step => step.number ?? 'renewal');
   const prefill = Buffer.from(JSON.stringify(input)).toString('base64url');
   return { total: result.total, baseline: result.baseline, availableUntil: label(result.end), steps,
     unusedCards: result.unusedCards, url: origin + '/#prefill=' + prefill,
+    ...(input.tierChange ? { quotaBasis: input.tierChange.from } : {}),
     context: { origin, input, token: result.planToken, total: result.total, actions, seen: [...seen, planKey(result)] } };
 }
 

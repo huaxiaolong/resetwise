@@ -193,14 +193,15 @@ details[open] > summary::after { transform: rotate(225deg) translate(-1px, -1px)
 .field input[type="datetime-local"] { padding-inline: 7px; font-size: .76rem; }
 .field input[type="number"] { appearance: textfield; }
 .field input::-webkit-inner-spin-button, .field input::-webkit-outer-spin-button { appearance: none; margin: 0; }
-.field input[aria-invalid="true"] { border-color: #b72e4a; }
+.field :is(input, select)[aria-invalid="true"] { border-color: #b72e4a; }
 .input-unit { position: relative; display: block; font-variant-numeric: tabular-nums; }
 .input-unit input { padding-right: 29px; }
 .input-unit > span { position: absolute; right: 9px; top: 9px; color: var(--muted); font-size: .78rem; pointer-events: none; }
 .field-hint { color: var(--muted); font-size: .75rem; line-height: 1.55; font-weight: 420; }
 .check-row { display: flex; align-items: center; gap: 7px; font-size: .83rem; }
 .check-row input { width: 16px; height: 16px; margin: 0; accent-color: var(--accent); }
-.subscription-fields > .check-row { align-self: end; min-height: 36px; }
+.subscription-fields { display: grid; gap: 8px; }
+.subscription-fields > .mode-picker { grid-template-columns: repeat(3, minmax(0, 1fr)); margin: 0; }
 .card-settings { display: grid; gap: 8px; padding-block-start: 5px; }
 .card-settings-head { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
 .card-settings-head h3 { margin: 0; font-size: .88rem; }
@@ -442,7 +443,7 @@ details[open] > summary::after { transform: rotate(225deg) translate(-1px, -1px)
 .timeline .card-expiry { --mark-ink: #8a4669; --mark-shape: polygon(50% 0, 100% 50%, 50% 100%, 0 50%); }
 .timeline .grace { --mark-ink: #865311; --mark-shape: polygon(50% 0, 100% 100%, 0 100%); }
 .timeline .lapse { --mark-ink: #91304e; --mark-shape: polygon(0 15%, 100% 15%, 50% 95%); }
-.timeline .renewal { --mark-ink: #246858; --mark-shape: polygon(30% 0, 100% 0, 70% 100%, 0 100%); }
+.timeline :is(.renewal, .tier-change) { --mark-ink: #246858; --mark-shape: polygon(30% 0, 100% 0, 70% 100%, 0 100%); }
 .timeline .end { --mark-ink: var(--ink); --mark-shape: inset(0 32%); }
 .timeline-name { position: relative; }
 .timeline-name::before {
@@ -478,7 +479,6 @@ details[open] > summary::after { transform: rotate(225deg) translate(-1px, -1px)
 @media (min-width: 1180px) {
   .workspace { grid-template-columns: minmax(322px, .9fr) minmax(0, 2.7fr); gap: 20px; }
   #weekly-fields { grid-template-columns: minmax(0, 1fr) minmax(170px, 1.6fr); align-items: end; }
-  .subscription-fields { grid-template-columns: minmax(170px, 1.6fr) minmax(0, 1fr); }
   #time-setting .date-pair { grid-template-columns: minmax(0, 1fr); }
   .result-body { grid-template-columns: minmax(0, 1.3fr) minmax(320px, 1fr); align-items: start; gap: 20px; }
   .plan-breakdown { max-height: calc(100vh - 24px); max-height: calc(100dvh - 24px); overflow: auto; scrollbar-width: thin; }

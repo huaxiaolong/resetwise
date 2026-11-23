@@ -843,6 +843,69 @@ function withCards(expiries, overrides = {}) {
     cards: expiries.map(until => ({ until })), ...overrides });
 }
 
+test('a downgrade carries spent quota and opens the target five-hour window at the new cap', () => {
+  const input = withCards([], {
+    subscription: { end: start + DAY, channel: 'web', renew: true, renewDays: 1 },
+    long: { end: start + HOUR, remaining: 85 },
+    tierChange: { from: 'pro100', to: 'plus', at: start, weeklyPercent: 10, shortAmount: 25 },
+  });
+  const result = finish(planReset(input));
+  assert.equal(result.baseline, 10);
+  assert.equal(result.total, 10);
+  assert.equal(result.usageWindows.length, 4);
+  assert.deepEqual(result.usageWindows[0], { start: start + HOUR, end: start + 6 * HOUR, amount: 2.5 });
+  assert.deepEqual(result.events.slice(0, 2), [
+    { at: start, type: 'tier-change', scope: 0, from: 'pro100', to: 'plus' },
+    { at: start + HOUR, type: 'cycle', scope: 1 },
+  ]);
+});
+
+test('an upgrade values the same card at the target cap after the switch', () => {
+  const at = start + 5;
+  const input = withCards([at + 3], {
+    subscription: { end: start + DAY, channel: 'web', renew: true, renewDays: 1 },
+    long: { end: start + 7 * DAY, remaining: 100 },
+    tierChange: { from: 'pro100', to: 'pro500', at, weeklyPercent: 500 },
+  });
+  const result = finish(planReset(input));
+  assert.equal(result.baseline, 500);
+  assert.equal(result.total, 1_000);
+  assert.equal(result.cards[0].gain, 500);
+  assert.deepEqual(result.cards[0].window, { start: at + 1, end: at + 2 });
+  assert.equal(finish(alternatePlan(input, result, 'renewal', 1)), null);
+});
+
+test('a card before an upgrade separates its restored quota from its gain over the full plan', () => {
+  const minute = (month, day, hour) => new Date(2026, month - 1, day, hour).getTime() / MINUTE;
+  const paidEnd = minute(12, 3, 17);
+  const input = withCards([minute(11, 24, 13), minute(11, 26, 9), minute(12, 24, 9)], {
+    snapshot: minute(11, 24, 9),
+    subscription: { end: paidEnd, channel: 'ios', graceDays: 3, renew: true },
+    long: { end: minute(11, 30, 9), remaining: 86 },
+    tierChange: { from: 'pro100', to: 'pro500', at: paidEnd, weeklyPercent: 500 },
+  });
+  const result = finish(planReset(input));
+  const third = result.cards[2];
+  assert.ok(third.at < paidEnd);
+  assert.equal(result.total, 3286);
+  assert.equal(result.baseline, 2586);
+  assert.equal(third.gain, 500);
+  assert.deepEqual(third.restored, { scope: 1, long: 100, short: 0 });
+});
+
+test('a coincident weekly refresh uses the lower cap relative to the originating subscription', () => {
+  const at = start + 1;
+  const input = withCards([], {
+    subscription: { end: start + DAY, channel: 'web', renew: true, renewDays: 1 },
+    long: { end: at, remaining: 20 },
+    tierChange: { from: 'pro200', to: 'pro100', at, weeklyPercent: 50 },
+  });
+  const result = finish(planReset(input));
+  assert.equal(result.total, 70);
+  assert.deepEqual(result.usageWindows.map(({ amount }) => amount), [20, 50]);
+  assert.deepEqual(result.renewal, { kind: 'switch', at, from: 'pro200', to: 'pro100' });
+});
+
 test('browses separated equal-usage time windows for the same card in both directions', () => {
   const input = withCards([start + 12], {
     subscription: { end: start + 12, channel: 'web' },

@@ -49,6 +49,30 @@ test('keeps missing card details and subscription fields visible to the caller',
   assert.deepEqual(await first({ usage: profile }, origin), { missing: ['subscription.end', 'cards'] });
 });
 
+test('uses the current account tier and requires a target, effective time, and weekly quota ratio for a switch', () => {
+  const at = subscription.end;
+  const profiles = [
+    ['plus', short, 'plus', 'pro100'],
+    ['prolite', null, 'pro100', 'plus'],
+    ['pro', null, 'pro200', 'plus'],
+    ['promax', null, 'pro500', 'plus'],
+  ];
+  for (const [planType, secondary, from, to] of profiles) {
+    const { input } = buildInput(usage(planType, secondary), {
+      subscription: { ...subscription, renew: false }, tierChange: { to, at, weeklyPercent: 10 },
+    });
+    assert.deepEqual(input.tierChange, { from, to, at, weeklyPercent: 10 });
+    assert.equal(input.subscription.renew, true);
+  }
+
+  const unknown = usage('unknown', short);
+  assert.deepEqual(buildInput(unknown, { subscription, tierChange: {} }), {
+    missing: ['tierChange.from', 'tierChange.to', 'tierChange.at', 'tierChange.weeklyPercent'],
+  });
+  const knownChange = { from: 'pro100', to: 'plus', at, weeklyPercent: 10, shortAmount: 20 };
+  assert.deepEqual(buildInput(unknown, { subscription, tierChange: knownChange }).input.tierChange, knownChange);
+});
+
 test('plans iOS subscriptions without grace days or a required subscription channel', () => {
   const profile = usage('prolite', null);
   const { input: ios } = buildInput(profile, { subscription: { ...subscription, graceDays: 3 } });
@@ -93,7 +117,32 @@ test('passes a continuous annual renewal through the Skill and its prefill link'
   const prefill = JSON.parse(Buffer.from(encoded, 'base64url').toString());
   assert.equal(prefill.subscription.allowLapse, false);
   assert.equal(prefill.subscription.renewDays, 366);
+  assert.equal(prefill.tierChange, undefined);
   assert.deepEqual(await more({ context: plan.context, action: 'renewal' }), { exhausted: true });
+});
+
+test('prefills a fixed tier switch and labels quota in units of the starting tier', async () => {
+  const profile = usage('pro', null, { availableCount: 0, credits: [] });
+  const tierChange = { to: 'plus', at: subscription.end, weeklyPercent: 5, shortAmount: 20 };
+  const plan = await first({ usage: profile, settings: { subscription, tierChange } }, origin);
+  assert.equal(plan.quotaBasis, 'pro200');
+  assert.deepEqual(plan.steps, [{ kind: 'tier-change', at: subscription.end, window: '11/30 17:00', from: 'pro200', to: 'plus' }]);
+  const encoded = new URLSearchParams(new URL(plan.url).hash.slice(1)).get('prefill');
+  const prefill = JSON.parse(Buffer.from(encoded, 'base64url').toString());
+  assert.deepEqual(prefill.tierChange, { from: 'pro200', ...tierChange });
+  assert.equal(prefill.subscription.renew, true);
+  assert.deepEqual(plan.context.actions, []);
+  assert.deepEqual(await more({ context: plan.context }), { exhausted: true });
+});
+
+test('does not present a same-tier plan when an older service ignores a tier switch', async t => {
+  const profile = usage('prolite', null, { availableCount: 0, credits: [] });
+  const tierChange = { to: 'plus', at: subscription.end, weeklyPercent: 10 };
+  t.mock.method(globalThis, 'fetch', () => new Response(JSON.stringify({
+    type: 'result', value: { cards: [], renewal: { kind: 'continue' } },
+  })));
+  await assert.rejects(first({ usage: profile, settings: { subscription, tierChange } }, origin),
+    /did not apply the tier change/);
 });
 
 test('makes a zero-grace plan and finds a later window with the same quota', async () => {

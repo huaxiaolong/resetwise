@@ -56,7 +56,7 @@ async function readRequest(request) {
 
 function inputForPlan(input) {
   requireInput(object(input));
-  const { snapshot, mode, hours, subscription, long, short, card, cards, resets, timeZone } = input;
+  const { snapshot, mode, hours, subscription, tierChange, long, short, card, cards, resets, timeZone } = input;
   requireInput(typeof timeZone === 'string' && timeZone.length < 100 && /^[a-z][a-z\d_+/-]*$/i.test(timeZone));
   let zone;
   try { zone = new Intl.DateTimeFormat('en', { timeZone }).resolvedOptions().timeZone; } catch { throw invalid(); }
@@ -74,7 +74,20 @@ function inputForPlan(input) {
   requireInput(!renew || renewDays == null || whole(renewDays, 1, 366), 'renew-days');
   requireInput(!renew || renewDays != null || billingDay == null || whole(billingDay, 1, 31), 'billing-day');
 
-  const active = end + (channel === 'ios' ? Math.round(graceDays * DAY) : 0) > snapshot;
+  const accessEnd = end + (channel === 'ios' ? Math.round(graceDays * DAY) : 0);
+  const active = accessEnd > snapshot;
+  let change;
+  if (tierChange != null) {
+    requireInput(object(tierChange), 'tier-from');
+    const { from, to, at, weeklyPercent, shortAmount } = tierChange;
+    requireInput(planner.weeklyTiers.includes(from), 'tier-from');
+    requireInput(to !== from && planner.weeklyTiers.includes(to), 'tier-to');
+    requireInput(active && minute(at) && snapshot <= at && at <= accessEnd, 'tier-at');
+    requireInput(renew, 'subscription-renew');
+    requireInput(within(weeklyPercent, 0.01, 10000), 'tier-weekly-percent');
+    requireInput(shortAmount == null || (to === 'plus' && within(shortAmount, 0.01, 100)), 'tier-short-amount');
+    change = { from, to, at, weeklyPercent, shortAmount: shortAmount ?? undefined };
+  }
   requireInput(object(long));
   requireInput(!active || minute(long.end), 'long-end');
   requireInput(!active || long.start == null || minute(long.start), 'long-start');
@@ -92,6 +105,7 @@ function inputForPlan(input) {
     timeZone: zone, snapshot, mode, hours: mode === 'healthy' ? hours : [],
     subscription: { end, channel, graceDays, renew, allowLapse: allowLapse !== false, renewDays: renew ? renewDays ?? null : null,
       billingDay: renew && renewDays == null ? billingDay ?? null : null },
+    ...(change && { tierChange: change }),
     long: { start: active ? long.start ?? null : null, end: active ? long.end : null, remaining: active ? long.remaining : 0 },
     short: short == null ? null : { amount: short.amount,
       remaining: active ? short.remaining : 100, end: active ? short.end ?? null : null },

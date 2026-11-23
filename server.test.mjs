@@ -201,6 +201,79 @@ test('validates the continuous-only option and keeps it when searching signed al
   assert.equal((await response.json()).field, 'renew-continuous-only');
 });
 
+test('rejects invalid tier changes before running the planner', async () => {
+  const { snapshot, subscription } = example;
+  const tierChange = { from: 'pro100', to: 'plus', at: subscription.end, weeklyPercent: 10 };
+  const input = { ...example, tierChange };
+  const cases = [
+    [{ ...input, tierChange: 'plus' }, 'tier-from'],
+    [{ ...input, tierChange: { ...tierChange, from: 'constructor' } }, 'tier-from'],
+    [{ ...input, tierChange: { ...tierChange, to: 'pro100' } }, 'tier-to'],
+    [{ ...input, tierChange: { ...tierChange, at: snapshot - 1 } }, 'tier-at'],
+    [{ ...input, tierChange: { ...tierChange, at: subscription.end + 3 * 1440 + 1 } }, 'tier-at'],
+    [{ ...input, subscription: { ...subscription, end: snapshot, graceDays: 0 },
+      tierChange: { ...tierChange, at: snapshot } }, 'tier-at'],
+    [{ ...input, subscription: { ...subscription, renew: false } }, 'subscription-renew'],
+    [{ ...input, tierChange: { ...tierChange, weeklyPercent: undefined } }, 'tier-weekly-percent'],
+    [{ ...input, tierChange: { ...tierChange, weeklyPercent: 0 } }, 'tier-weekly-percent'],
+    [{ ...input, tierChange: { ...tierChange, weeklyPercent: 10001 } }, 'tier-weekly-percent'],
+    [{ ...input, tierChange: { ...tierChange, shortAmount: 0 } }, 'tier-short-amount'],
+    [{ ...input, tierChange: { ...tierChange, shortAmount: 101 } }, 'tier-short-amount'],
+    [{ ...input, tierChange: { ...tierChange, to: 'pro200', shortAmount: 16 } }, 'tier-short-amount'],
+  ];
+  for (const [invalidInput, field] of cases) {
+    const response = await post({ operation: 'plan', input: invalidInput });
+    assert.equal(response.status, 400);
+    assert.equal((await response.json()).field, field);
+  }
+});
+
+test('keeps the tier change and current quota units when describing a signed alternative', async () => {
+  const at = example.snapshot + 60;
+  const input = { ...example, short: null, long: { end: at + 300, remaining: 80 },
+    subscription: { end: at, channel: 'web', graceDays: 0, renew: true, renewDays: 1 },
+    tierChange: { from: 'pro100', to: 'pro200', at, weeklyPercent: 200 },
+    card: { restart: false }, cards: [card(at + 1440, 1)] };
+  const original = await solve(input);
+  const jobs = [{ action: 1, direction: -1 }, { action: 1, direction: 1 }, { action: 'renewal', direction: 1 }];
+  const messages = await receive({ operation: 'choices', plan: original.planToken, jobs });
+  const choices = messages.filter(message => message.type === 'progress').map(message => message.value);
+  assert.equal(choices.find(choice => choice.action === 'renewal').choice, null);
+  const candidate = choices.find(choice => choice.action === 1 && typeof choice.choice === 'string')?.choice;
+  assert.ok(candidate);
+  const alternative = (await receive({ operation: 'describe', plan: original.planToken, candidate })).at(-1).value;
+
+  assert.notEqual(alternative.cards[0].at, original.cards[0].at);
+  for (const plan of [original, alternative]) {
+    const { kind, from, to, at: effective } = plan.renewal;
+    assert.deepEqual({ kind, from, to, at: effective }, { kind: 'switch', from: 'pro100', to: 'pro200', at });
+    assert.equal(plan.end, at + 1440);
+    assert.equal(plan.baseline, 380);
+    assert.equal(plan.total, 580);
+  }
+});
+
+test('applies the supplied Plus 5-hour allowance at a switch at the snapshot', async () => {
+  const { snapshot } = example;
+  const input = { ...example, short: null, long: { end: snapshot + 4 * 1440, remaining: 100 },
+    subscription: { end: snapshot + 60, channel: 'web', graceDays: 0, renew: true, renewDays: 1 },
+    tierChange: { from: 'pro100', to: 'plus', at: snapshot, weeklyPercent: 10, shortAmount: 25 }, cards: [] };
+  const plan = await solve(input);
+  assert.equal(plan.total, 10);
+  assert.equal(plan.usageWindows[0].amount, 2.5);
+});
+
+test('measures both tiers against the current allowance when upgrading from Plus', async () => {
+  const at = example.snapshot + 60;
+  const input = { ...example, long: { end: at + 4 * 1440, remaining: 80 },
+    subscription: { end: at, channel: 'web', graceDays: 0, renew: true, renewDays: 1 },
+    tierChange: { from: 'plus', to: 'pro100', at, weeklyPercent: 1000 }, cards: [] };
+  const plan = await solve(input);
+  assert.equal(plan.baseline, 980);
+  assert.equal(plan.total, 980);
+  assert.deepEqual(plan.usageWindows.map(({ amount }) => amount), [16, 964]);
+});
+
 test('reports a failed direction, keeps confirmed results, and allows a retry', async t => {
   const original = await solve(example);
   const alternate = planner.alternatePlan;

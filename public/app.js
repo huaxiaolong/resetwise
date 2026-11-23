@@ -5,6 +5,12 @@
   const DAY = 24 * 60;
   const MAX_RESETS = 3;
   const EPSILON = 1e-7;
+  const tiers = {
+    plus: { name: 'Plus', weeklyWeight: 10 },
+    pro100: { name: 'Pro 100', weeklyWeight: 100 },
+    pro200: { name: 'Pro 200', weeklyWeight: 200 },
+    pro500: { name: 'Pro 500', weeklyWeight: 500 },
+  };
   const SERVICE_ERROR = '计算服务暂时不可用，请重试。';
   const failedChoice = { error: '备选时段检查失败，可以重试。' };
   const canAdjust = choice => Boolean(choice && !choice.pending);
@@ -41,12 +47,15 @@
   let originalPlan = null;
   let activeChoices = null;
   let adjustment = null;
+  let standardShortEnabled;
+  let switchShortEnabled;
   let chartTipAnchor = null;
   let chartTipTimer;
   let lastError = null;
   let statusLabels = ['正在载入示例', '正在计算'];
 
   const mode = () => form.elements.mode.value;
+  const renewalMode = () => form.elements.renewal.value;
   const number = id => get(id).valueAsNumber;
   const text = (id, value) => { get(id).textContent = value; };
   const quotaPercent = value => value > 0 && value < 0.01 ? '<0.01%' : percentFormat.format(value / 100);
@@ -97,16 +106,33 @@
     for (const field of element.querySelectorAll('input, select')) field.disabled = !enabled;
   }
 
+  function syncShortToggle(switching) {
+    const toggle = get('short-enabled');
+    if (switching && standardShortEnabled === undefined) {
+      standardShortEnabled = toggle.checked;
+      toggle.checked = switchShortEnabled ?? (get('tier-from').value === 'plus' && toggle.checked);
+    } else if (!switching && standardShortEnabled !== undefined) {
+      switchShortEnabled = toggle.checked;
+      toggle.checked = standardShortEnabled;
+      standardShortEnabled = undefined;
+    }
+    return toggle.checked;
+  }
+
   function syncForm() {
     const healthy = mode() === 'healthy';
-    const short = get('short-enabled').checked;
+    const renewal = renewalMode();
+    const switching = renewal === 'switch';
+    const short = syncShortToggle(switching);
     const ios = get('subscription-ios').checked;
     const grace = ios ? number('grace-days') : 0;
-    const renew = get('subscription-renew').checked;
+    const renew = renewal === 'renew' || switching;
     const days = get('renew-days').value;
     const recorded = dateFromInput('snapshot').getTime();
     const paidEnd = dateFromInput('subscription-end');
-    const endDay = paidEnd.getDate();
+    const changeAt = dateFromInput('tier-at');
+    const termStart = switching && Number.isFinite(changeAt.getTime()) ? changeAt : paidEnd;
+    const endDay = termStart.getDate();
     const expiry = paidEnd.getTime() + Math.round(grace * DAY) * MINUTE;
     const current = !(expiry <= (Number.isFinite(recorded) ? recorded : Math.floor(Date.now() / MINUTE) * MINUTE));
     const count = announcements.children.length;
@@ -118,7 +144,10 @@
     showFields('short-refresh-field', short && current);
     showFields('grace-fields', ios);
     showFields('renew-fields', renew);
-    const monthEnd = endDay < 31 && endDay === new Date(paidEnd.getFullYear(), paidEnd.getMonth() + 1, 0).getDate();
+    showFields('continuous-renewal-field', renew && !switching);
+    showFields('tier-change-fields', switching);
+    showFields('tier-short-field', switching && get('tier-to').value === 'plus');
+    const monthEnd = endDay < 31 && endDay === new Date(termStart.getFullYear(), termStart.getMonth() + 1, 0).getDate();
     showFields('billing-day-field', renew && current && !days && (monthEnd || (prefilledZone && get('billing-day').value)));
     exampleButton.textContent = t(example ? '填写我的额度' : '载入示例');
     text('short-note', t(short ? '已启用' : '未启用'));
@@ -126,7 +155,7 @@
     if (ios) subscriptionNotes.push(grace > 0 ? t('iOS · +{days} 天', { days: grace }) : 'iOS');
     if (renew) {
       const term = days ? t('续订 {days} 天', { days }) : t('按月续订');
-      subscriptionNotes.push(continuousOnly.checked ? t('只连续续订') : term);
+      subscriptionNotes.push(!switching && continuousOnly.checked ? t('只连续续订') : term);
     }
     text('subscription-note', subscriptionNotes.join(' · '));
     text('reset-note', `${count} / ${MAX_RESETS}`);
@@ -169,20 +198,31 @@
     }
 
     const billingDay = get('billing-day');
+    const subscriptionEnd = timestamp('subscription-end');
+    const renewal = renewalMode();
+    const switching = renewal === 'switch';
+    const from = get('tier-from').value;
+    const to = get('tier-to').value;
+    if (switching && from === to) {
+      throw Object.assign(new RangeError('目标套餐需要与当前套餐不同。'), { field: 'tier-to' });
+    }
     return {
       timeZone: prefilledZone ?? Intl.DateTimeFormat().resolvedOptions().timeZone,
       snapshot: timestamp('snapshot') ?? Math.floor(Date.now() / MINUTE),
       mode: mode(),
       hours: [minutes('awake-start'), minutes('awake-end')],
       subscription: {
-        end: timestamp('subscription-end'),
+        end: subscriptionEnd,
         channel: get('subscription-ios').checked ? 'ios' : 'web',
         graceDays: get('grace-days').disabled ? 0 : number('grace-days'),
-        renew: get('subscription-renew').checked,
-        allowLapse: continuousOnly.disabled || !continuousOnly.checked,
+        renew: renewal === 'renew' || switching,
+        allowLapse: !switching && (continuousOnly.disabled || !continuousOnly.checked),
         renewDays: get('renew-days').value ? number('renew-days') : null,
         billingDay: billingDay.disabled || !billingDay.value ? null : billingDay.valueAsNumber,
       },
+      ...(switching ? { tierChange: { from, to, at: timestamp('tier-at') ?? subscriptionEnd,
+        weeklyPercent: number('tier-weekly-percent'),
+        ...(to === 'plus' ? { shortAmount: number('tier-short-amount') } : {}) } } : {}),
       long: {
         start: timestamp('long-start'),
         end: timestamp('long-end'),
@@ -297,12 +337,23 @@
   }
 
   const cardName = number => t('第 {number} 张重置卡', { number });
+  const tierName = tier => tiers[tier].name;
+  const tierPercent = (from, to) => from && to && from !== to ? tiers[to].weeklyWeight * 100 / tiers[from].weeklyWeight : '';
+  const tierChangeLabel = ({ from, to }) => t('更换套餐 · {from} → {to}', { from: tierName(from), to: tierName(to) });
   const renewalLabel = kind => t(kind === 'restart' ? '转免费后重新订阅' : '连续续订');
   const gainHundredths = gain => Math.sign(gain) * Math.round(Math.abs(gain) * 100);
 
-  function cardGainLabel(gain) {
+  function signedQuota(gain) {
     const sign = gain > EPSILON ? '+' : gain < -EPSILON ? '−' : '';
-    return t('真实额度 {value}', { value: sign + quotaPercent(sign ? Math.abs(gain) : 0) });
+    return sign + quotaPercent(sign ? Math.abs(gain) : 0);
+  }
+
+  function cardGainLabel(gain, restored) {
+    const labels = [];
+    if (restored?.long > EPSILON) labels.push(t('当场恢复周额度 {value}', { value: signedQuota(restored.long) }));
+    if (restored?.short > EPSILON) labels.push(t('当场恢复 5 小时额度 {value}', { value: signedQuota(restored.short) }));
+    labels.push(t('全程净增 {value}', { value: signedQuota(gain) }));
+    return labels.join(' · ');
   }
 
   function actionsFor(result) {
@@ -313,7 +364,7 @@
       // Round the cumulative gain so the displayed differences still add up.
       cumulativeGain += card.gain;
       const rounded = gainHundredths(index === result.cards.length - 1 ? totalGain : cumulativeGain);
-      const gain = cardGainLabel((rounded - displayedHundredths) / 100);
+      const gain = cardGainLabel((rounded - displayedHundredths) / 100, card.restored);
       displayedHundredths = rounded;
       return {
         key: card.number, at: card.at, title: t('使用第 {number} 张重置卡', { number: card.number }),
@@ -323,7 +374,9 @@
       };
     });
     const renewal = result.renewal;
-    if (renewal) {
+    if (renewal?.kind === 'switch') {
+      actions.unshift({ key: 'renewal', at: renewal.at, title: tierChangeLabel(renewal), value: dateLabel(renewal.at), fixed: true });
+    } else if (renewal) {
       const restart = renewal.kind === 'restart';
       actions.push({ key: 'renewal', at: restart ? renewal.at : null, title: renewalLabel(renewal.kind),
         value: restart ? t('{time} 起', { time: dateLabel(renewal.at) }) : '',
@@ -442,7 +495,7 @@
   function prepareActiveChoices(result, choices = new Map()) {
     activeChoices = choices;
     const actions = result.cards.map(card => card.number);
-    if (result.renewal) actions.push('renewal');
+    if (result.renewal && result.renewal.kind !== 'switch') actions.push('renewal');
     prepareChoices(result, actions, choices, () => activeChoices === choices);
   }
 
@@ -696,8 +749,9 @@
       key: number, label: t('第 {number} 张', { number }), kind: 'card', start: window.start,
       end: Math.min(window.end + 1, end),
     }));
-    if (renewal?.kind === 'restart') {
-      periods.push({ key: 'renewal', label: t('续订'), kind: 'renewal', start: renewal.at, end: renewal.at });
+    if (renewal && renewal.kind !== 'continue') {
+      const label = t(renewal.kind === 'switch' ? '更换套餐' : '续订');
+      periods.unshift({ key: 'renewal', label, kind: 'renewal', start: renewal.at, end: renewal.at });
     }
     periods.sort((left, right) => left.start - right.start);
     const { folds, position } = chartScale(start, end, periods);
@@ -769,7 +823,8 @@
     }
     for (const event of result.events) {
       if (event.type === 'renewal' && event.kind === 'continue') continue;
-      const title = t({ cycle: '{quota}刷新', announced: '公告重置 · {quota}', card: '使用第 {number} 张重置卡重置额度',
+      const title = event.type === 'tier-change' ? tierChangeLabel(event)
+        : t({ cycle: '{quota}刷新', announced: '公告重置 · {quota}', card: '使用第 {number} 张重置卡重置额度',
         lapse: '转为免费', renewal: '重新订阅 · 额度重置' }[event.type], {
         quota: scopeText(event.scope), number: event.number,
       });
@@ -779,6 +834,7 @@
       events.push({ at, type: 'card-expiry', title: t('第 {number} 张重置卡到期', { number: index + 1 }) });
     });
     const hasGrace = input.subscription.end < result.accessEnd
+      && (result.renewal?.kind !== 'switch' || result.renewal.at > input.subscription.end)
       && (result.renewal?.kind !== 'continue' || result.renewal.grace);
     if (hasGrace) {
       events.push({ at: input.subscription.end, type: 'grace', title: t('订阅到期 · 开始宽限期') });
@@ -819,26 +875,29 @@
       const value = document.createElement('strong');
       const timing = document.createElement('div');
       timing.className = 'ticket-action-time';
-      const adjust = document.createElement('button');
-      adjust.type = 'button';
-      adjust.className = 'ticket-adjust';
-      adjust.dataset.action = action.key;
-      const renewal = action.key === 'renewal';
-      adjust.textContent = t(renewal ? '更换续订方式' : '调整');
-      if (!renewal) adjust.setAttribute('aria-label', t('调整时段 · {action}', { action: action.title }));
-      adjust.setAttribute('aria-controls', adjustmentPanel.id);
-      adjust.addEventListener('click', () => toggleAdjustment(action.key));
       label.textContent = action.title;
       if (action.gain) {
         const gain = document.createElement('span');
         gain.className = 'ticket-card-gain';
         gain.textContent = action.gain;
-        gain.title = t('按示例时刻逐张加入，计入自然刷新变化');
+        gain.title = t('当场恢复按示例时刻计算。全程净增计入自然刷新变化。');
         label.append(gain);
       }
       value.textContent = action.value;
       value.hidden = !action.value;
-      timing.append(value, adjust);
+      timing.append(value);
+      if (!action.fixed) {
+        const adjust = document.createElement('button');
+        adjust.type = 'button';
+        adjust.className = 'ticket-adjust';
+        adjust.dataset.action = action.key;
+        const renewal = action.key === 'renewal';
+        adjust.textContent = t(renewal ? '更换续订方式' : '调整');
+        if (!renewal) adjust.setAttribute('aria-label', t('调整时段 · {action}', { action: action.title }));
+        adjust.setAttribute('aria-controls', adjustmentPanel.id);
+        adjust.addEventListener('click', () => toggleAdjustment(action.key));
+        timing.append(adjust);
+      }
       row.append(label, timing);
       return row;
     }));
@@ -849,6 +908,8 @@
     text('gain', gainLabel);
     text('access-end', dateLabel(result.end));
     get('comparison').hidden = expired;
+    text('quota-basis', result.renewal?.kind === 'switch'
+      ? t('{tier} 一轮周额度 = 100%', { tier: tierName(result.renewal.from) }) : t('一轮周额度 = 100%'));
     text('baseline', quotaPercent(result.baseline));
     get('plan-row').hidden = !result.cards.length;
     text('plan-total', quotaPercent(result.total));
@@ -942,6 +1003,8 @@
   function resetInputs() {
     prefilledTimes.clear();
     prefilledZone = undefined;
+    standardShortEnabled = undefined;
+    switchShortEnabled = undefined;
     form.reset();
     announcements.replaceChildren();
     cardFields.replaceChildren();
@@ -997,7 +1060,7 @@
       if (!encoded || encoded.length > 32_000) throw new Error();
       const bytes = Uint8Array.from(atob(encoded.replace(/-/g, '+').replace(/_/g, '/')), char => char.charCodeAt(0));
       const input = JSON.parse(new TextDecoder().decode(bytes));
-      const { subscription, long, short, cards, resets, card, mode, hours, snapshot, timeZone } = input;
+      const { subscription, tierChange, long, short, cards, resets, card, mode, hours, snapshot, timeZone } = input;
       if (!subscription || !long || !card || !Array.isArray(cards) || !Array.isArray(resets)
         || (mode !== 'extreme' && mode !== 'healthy') || !Array.isArray(hours) || hours.length !== 2) throw new Error();
       const zone = new Intl.DateTimeFormat('en', { timeZone }).resolvedOptions().timeZone;
@@ -1015,13 +1078,22 @@
       write('awake-start', clock(hours[0]));
       write('awake-end', clock(hours[1]));
       get('subscription-ios').checked = subscription.channel === 'ios';
-      get('subscription-renew').checked = subscription.renew === true;
+      form.elements.renewal.value = tierChange ? 'switch' : subscription.renew === true ? 'renew' : 'no-renew';
+      if (tierChange) {
+        if (!Object.hasOwn(tiers, tierChange.from) || !Object.hasOwn(tiers, tierChange.to)) throw new Error();
+        write('tier-from', tierChange.from);
+        write('tier-to', tierChange.to);
+        write('tier-weekly-percent', tierChange.weeklyPercent ?? tierPercent(tierChange.from, tierChange.to));
+        if (tierChange.shortAmount != null) write('tier-short-amount', tierChange.shortAmount);
+        setTime(get('tier-at'), tierChange.at);
+      }
       continuousOnly.checked = subscription.allowLapse === false;
       write('grace-days', subscription.graceDays);
       write('renew-days', subscription.renewDays);
       write('billing-day', subscription.billingDay);
       write('long-left', long.remaining);
       get('short-enabled').checked = short != null;
+      if (tierChange) standardShortEnabled = short != null;
       if (short) {
         write('short-amount', short.amount);
         write('short-left', short.remaining);
@@ -1068,7 +1140,15 @@
     event.preventDefault();
     calculate(true);
   });
-  form.addEventListener('input', changed);
+  form.addEventListener('input', event => {
+    const { id } = event.target;
+    if (id === 'tier-from' || id === 'tier-to') {
+      const from = get('tier-from').value;
+      get('tier-weekly-percent').value = tierPercent(from, get('tier-to').value);
+      if (id === 'tier-from') get('short-enabled').checked = from === 'plus';
+    }
+    changed();
+  });
   form.addEventListener('change', event => {
     if (event.target.name === 'mode' && !resultBody.hidden) calculate();
   });

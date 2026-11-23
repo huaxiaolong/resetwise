@@ -70,11 +70,49 @@
               <input id="long-end" type="datetime-local" required>
             </label>
           </div>
-          <div class="field-pair date-pair subscription-fields">
+          <div class="subscription-fields">
             <label class="field" for="subscription-end"><span data-i18n>订阅到期</span>
               <input id="subscription-end" type="datetime-local" required>
             </label>
-            <label class="check-row"><input id="subscription-renew" type="checkbox" checked><span data-i18n>规划续订</span></label>
+            <fieldset class="mode-picker">
+              <legend class="sr-only" data-i18n>续订安排</legend>
+              <label><input id="subscription-renew" type="radio" name="renewal" value="renew" checked><span data-i18n>规划续订</span></label>
+              <label><input id="subscription-no-renew" type="radio" name="renewal" value="no-renew"><span data-i18n>不续订</span></label>
+              <label><input id="subscription-switch" type="radio" name="renewal" value="switch"><span data-i18n>更换套餐</span></label>
+            </fieldset>
+          </div>
+          <div id="tier-change-fields" class="conditional-fields" hidden>
+            <div class="field-pair">
+              <label class="field" for="tier-from"><span data-i18n>当前套餐</span>
+                <select id="tier-from" required>
+                  <option value="" data-i18n>请选择套餐</option>
+                  <option value="plus">Plus</option>
+                  <option value="pro100">Pro 100</option>
+                  <option value="pro200">Pro 200</option>
+                  <option value="pro500">Pro 500</option>
+                </select>
+              </label>
+              <label class="field" for="tier-to"><span data-i18n>目标套餐</span>
+                <select id="tier-to" required>
+                  <option value="" data-i18n>请选择套餐</option>
+                  <option value="plus">Plus</option>
+                  <option value="pro100">Pro 100</option>
+                  <option value="pro200">Pro 200</option>
+                  <option value="pro500">Pro 500</option>
+                </select>
+              </label>
+            </div>
+            <label class="field" for="tier-weekly-percent">
+              <span class="field-caption"><span data-i18n>目标周额度占当前周额度</span><span class="field-hint" id="tier-weekly-hint" data-i18n>预估比例，可修改</span></span>
+              <span class="input-unit"><input id="tier-weekly-percent" type="number" min="0.01" max="10000" step="any" required aria-describedby="tier-weekly-hint"><span>%</span></span>
+            </label>
+            <label class="field" for="tier-at">
+              <span class="field-caption"><span data-i18n>生效时间</span><span class="field-hint" id="tier-at-hint" data-i18n>留空用订阅到期时间</span></span>
+              <input id="tier-at" type="datetime-local" aria-describedby="tier-at-hint">
+            </label>
+            <label class="field" id="tier-short-field" for="tier-short-amount" hidden><span data-i18n>Plus 的 5 小时满额占周额度</span>
+              <span class="input-unit"><input id="tier-short-amount" type="number" min="0.01" max="100" step="any" value="16" required><span>%</span></span>
+            </label>
           </div>
           <div class="card-settings" aria-labelledby="card-settings-title">
             <div class="card-settings-head">
@@ -124,7 +162,7 @@
               </label>
             </div>
             <div id="renew-fields" class="conditional-fields" hidden>
-              <label class="check-row"><input id="renew-continuous-only" type="checkbox"><span data-i18n>只连续续订</span></label>
+              <label class="check-row" id="continuous-renewal-field"><input id="renew-continuous-only" type="checkbox"><span data-i18n>只连续续订</span></label>
               <label class="field" for="renew-days"><span data-i18n>下一期订阅天数（选填）</span>
                 <input id="renew-days" type="number" min="1" max="366" step="1" placeholder="留空按月" data-i18n data-i18n-attribute="placeholder">
               </label>
@@ -199,7 +237,7 @@
             <section class="panel comparison" id="comparison" aria-labelledby="comparison-title">
               <div class="section-heading">
                 <h3 id="comparison-title" data-i18n>预计可用额度</h3>
-                <span data-i18n>一轮周额度 = 100%</span>
+                <span id="quota-basis">一轮周额度 = 100%</span>
               </div>
               <div class="comparison-row">
                 <span data-i18n>不用卡</span>
@@ -220,7 +258,7 @@
               <div class="section-heading">
                 <h3 id="usage-title" data-i18n>方案时间线</h3>
               </div>
-              <figure class="plan-chart" id="plan-chart" aria-label="用卡和续订时间分布" data-i18n data-i18n-attribute="aria-label">
+              <figure class="plan-chart" id="plan-chart" aria-label="用卡和订阅变更时间分布" data-i18n data-i18n-attribute="aria-label">
                 <div class="plan-chart-grid">
                   <div class="plan-chart-labels" id="plan-chart-labels" aria-hidden="true"></div>
                   <div class="plan-chart-plot">
